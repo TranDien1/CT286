@@ -31,3 +31,6 @@ Nút "Khôi phục dữ liệu mẫu" ở trang đăng nhập đưa dữ liệu 
 - `src/backend/queries.js` – truy vấn cho báo cáo
 - `src/backend/seed.js` – dữ liệu mẫu
 - `src/pages/` – các màn hình
+
+
+#Thong Branch
