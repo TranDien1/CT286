@@ -34,3 +34,16 @@ Nút "Khôi phục dữ liệu mẫu" ở trang đăng nhập đưa dữ liệu 
 
 
 #Thong Branch
+
+## Backend Spring Boot
+
+Backend đặt tại `backend/`, sử dụng SQL Server hiện có và **không** để Hibernate tự tạo hoặc sửa bảng (`ddl-auto: none`).
+
+Thiết lập biến môi trường theo mẫu `backend/.env.example`, sau đó chạy tại thư mục `backend`:
+
+```powershell
+$env:DB_PASSWORD = '<mat-khau-sql-server>'
+.\mvnw.cmd spring-boot:run
+```
+
+Khi chạy thành công, kiểm tra kết nối bằng `GET http://localhost:8080/api/health`.
