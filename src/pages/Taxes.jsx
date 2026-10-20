@@ -1,6 +1,5 @@
-import React, { useState } from 'react';
-import { useApp, api } from '../context/AppContext';
-import { usage } from '../backend/api';
+import React, { useEffect, useRef, useState } from 'react';
+import { useApp } from '../context/AppContext';
 import PageHeader, { ReadOnlyNotice } from '../components/common/PageHeader';
 import DataTable from '../components/common/DataTable';
 import Modal, { ConfirmModal } from '../components/common/Modal';
@@ -8,35 +7,67 @@ import StatusBadge from '../components/common/StatusBadge';
 
 // CAT-04: thuế đã dùng không sửa thuế suất; CAT-05: thuế bán/mua; CAT-06: kế toán quản lý; CAT-07: không có cột active.
 export default function Taxes() {
-  const { db, call, isAccountant, isAdmin, accountName } = useApp();
+  const { request, showToast, isAccountant, isAdmin } = useApp();
+  const [rows, setRows] = useState(null);
+  const [accounts, setAccounts] = useState([]);
+  const [error, setError] = useState('');
+  const [reloadKey, setReloadKey] = useState(0);
+  const [saving, setSaving] = useState(false);
+  const pending = useRef(false);
   const [editing, setEditing] = useState(null);
   const [deleting, setDeleting] = useState(null);
 
-  const rows = db.taxes.map(t => ({
-    ...t,
-    used: usage.tax(db, t.id),
-    isDefault: db.products.some(p => p.saleTaxId === t.id || p.purchaseTaxId === t.id)
-  }));
+  useEffect(() => {
+    let cancelled = false;
+    setRows(null); setError('');
+    Promise.all([request('/taxes'), request('/accounts')]).then(([taxes, availableAccounts]) => {
+      if (!cancelled) { setRows(taxes); setAccounts(availableAccounts); }
+    }).catch(err => { if (!cancelled) setError(err.message); });
+    return () => { cancelled = true; };
+  }, [reloadKey]);
 
-  const save = () => {
-    const res = call(api.saveTax, [{ ...editing, amount: editing.amount }], editing.id ? 'Đã lưu thuế.' : 'Đã thêm thuế.');
-    if (res.ok) setEditing(null);
+  const defaultAccountId = type => accounts.find(a => a.code === (type === 'sale' ? '3331' : '1331'))?.id ?? '';
+  const save = async () => {
+    if (pending.current) return;
+    if (editing.amount === '' || (editing.accountId === '' && !(editing.usedInTransactions && !editing.account))) {
+      showToast('Vui lòng nhập thuế suất và chọn tài khoản thuế.', 'warning'); return;
+    }
+    pending.current = true; setSaving(true);
+    try {
+      await request(editing.id ? `/taxes/${editing.id}` : '/taxes', {
+        method: editing.id ? 'PUT' : 'POST',
+        body: { name: editing.name, amount: editing.amount, typeTaxUse: editing.typeTaxUse,
+          accountId: editing.accountId === '' ? null : Number(editing.accountId) }
+      });
+      showToast(editing.id ? 'Đã lưu thuế.' : 'Đã thêm thuế.');
+      setEditing(null); setReloadKey(key => key + 1);
+    } catch (err) { showToast(err.message, 'warning'); }
+    finally { pending.current = false; setSaving(false); }
+  };
+  const remove = async () => {
+    if (pending.current || !deleting) return;
+    pending.current = true; setSaving(true);
+    try {
+      await request(`/taxes/${deleting.id}`, { method: 'DELETE' });
+      showToast('Đã xóa thuế.'); setDeleting(null); setReloadKey(key => key + 1);
+    } catch (err) { showToast(err.message, 'warning'); setDeleting(null); setReloadKey(key => key + 1); }
+    finally { pending.current = false; setSaving(false); }
   };
 
-  const editingUsed = editing?.id ? usage.tax(db, editing.id) : false;
+  const editingUsed = !!editing?.usedInTransactions;
 
   const columns = [
     { key: 'name', label: 'Tên thuế', sortable: true, render: r => <strong>{r.name}</strong> },
     { key: 'typeTaxUse', label: 'Loại', sortable: true, render: r => <StatusBadge status={r.typeTaxUse} /> },
     { key: 'amount', label: 'Thuế suất', sortable: true, className: 'text-right num', render: r => `${r.amount}%` },
-    { key: 'accountCode', label: 'Tài khoản', render: r => `${r.accountCode} ${accountName(r.accountCode)}` },
-    { key: 'used', label: 'Đã dùng trong giao dịch', render: r => (r.used ? 'Có' : 'Chưa') },
+    { key: 'account', label: 'Tài khoản', render: r => r.account ? `${r.account.code} ${r.account.name}` : '—' },
+    { key: 'usedInTransactions', label: 'Đã dùng trong giao dịch', render: r => (r.usedInTransactions ? 'Có' : 'Chưa') },
     ...(isAccountant ? [{
       key: 'actions', label: '', className: 'text-right o-nowrap',
       render: r => (
         <div className="o-row-actions">
-          <button type="button" className="o-btn o-btn-sm o-btn-secondary" onClick={() => setEditing({ ...r })}>Sửa</button>
-          {!r.used && !r.isDefault && <button type="button" className="o-btn o-btn-sm o-btn-danger" onClick={() => setDeleting(r)}>Xóa</button>}
+          <button type="button" className="o-btn o-btn-sm o-btn-secondary" onClick={() => setEditing({ ...r, accountId: r.account?.id ?? '' })}>Sửa</button>
+          {!r.usedInTransactions && !r.defaultForProduct && <button type="button" className="o-btn o-btn-sm o-btn-danger" onClick={() => setDeleting(r)}>Xóa</button>}
         </div>
       )
     }] : [])
@@ -48,21 +79,23 @@ export default function Taxes() {
         breadcrumb="Danh mục"
         title="Thuế"
         actions={isAccountant && (
-          <button type="button" className="o-btn o-btn-primary" onClick={() => setEditing({ name: '', amount: 10, typeTaxUse: 'sale', accountCode: '3331' })}>Thêm thuế</button>
+          <button type="button" className="o-btn o-btn-primary" disabled={!rows} onClick={() => setEditing({ name: '', amount: 10, typeTaxUse: 'sale', accountId: defaultAccountId('sale') })}>Thêm thuế</button>
         )}
       />
       {isAdmin && <ReadOnlyNotice>Admin chỉ được xem danh mục thuế.</ReadOnlyNotice>}
-      <DataTable columns={columns} data={rows} />
+      {error && <div className="o-notice o-notice-error" role="alert">{error} <button type="button" className="o-link-btn" onClick={() => setReloadKey(key => key + 1)}>Thử lại</button></div>}
+      {!rows && !error && <p>Đang tải thuế từ SQL Server…</p>}
+      {rows && <DataTable columns={columns} data={rows} />}
       <p className="text-muted o-report-note">Thuế đã dùng trong giao dịch không sửa được thuế suất; cần thuế suất mới thì tạo thuế mới. Thuế bán chỉ dùng cho hóa đơn bán, thuế mua chỉ dùng cho hóa đơn mua.</p>
 
       <Modal
         isOpen={!!editing}
-        onClose={() => setEditing(null)}
+        onClose={() => { if (!saving) setEditing(null); }}
         title={editing?.id ? 'Sửa thuế' : 'Thêm thuế'}
         footer={(
           <>
-            <button type="button" className="o-btn o-btn-secondary" onClick={() => setEditing(null)}>Đóng</button>
-            <button type="button" className="o-btn o-btn-primary" onClick={save}>Lưu</button>
+            <button type="button" className="o-btn o-btn-secondary" disabled={saving} onClick={() => setEditing(null)}>Đóng</button>
+            <button type="button" className="o-btn o-btn-primary" disabled={saving} onClick={save}>Lưu</button>
           </>
         )}
       >
@@ -77,7 +110,7 @@ export default function Taxes() {
               <div className="o-form-group">
                 <label className="d-block text-muted" htmlFor="txUse">Loại *</label>
                 <select id="txUse" className="w-100 p-1" value={editing.typeTaxUse} disabled={editingUsed}
-                  onChange={e => setEditing({ ...editing, typeTaxUse: e.target.value, accountCode: e.target.value === 'sale' ? '3331' : '1331' })}>
+                  onChange={e => setEditing({ ...editing, typeTaxUse: e.target.value, accountId: defaultAccountId(e.target.value) })}>
                   <option value="sale">Thuế bán</option>
                   <option value="purchase">Thuế mua</option>
                 </select>
@@ -90,8 +123,9 @@ export default function Taxes() {
             </div>
             <div className="o-form-group">
               <label className="d-block text-muted" htmlFor="txAcc">Tài khoản thuế *</label>
-              <select id="txAcc" className="w-100 p-1" value={editing.accountCode} disabled={editingUsed} onChange={e => setEditing({ ...editing, accountCode: e.target.value })}>
-                {db.accounts.map(a => <option key={a.code} value={a.code}>{a.code} {a.name}</option>)}
+              <select id="txAcc" className="w-100 p-1" value={editing.accountId} disabled={editingUsed} onChange={e => setEditing({ ...editing, accountId: e.target.value })}>
+                <option value="">Chọn tài khoản</option>
+                {accounts.map(a => <option key={a.id} value={a.id}>{a.code} {a.name}</option>)}
               </select>
             </div>
           </div>
@@ -104,8 +138,8 @@ export default function Taxes() {
         message={`Xóa "${deleting?.name}"? Thuế này chưa được dùng nên được xóa hẳn.`}
         confirmLabel="Xóa"
         danger
-        onClose={() => setDeleting(null)}
-        onConfirm={() => { call(api.deleteTax, [deleting.id], 'Đã xóa thuế.'); setDeleting(null); }}
+        onClose={() => { if (!saving) setDeleting(null); }}
+        onConfirm={remove}
       />
     </div>
   );

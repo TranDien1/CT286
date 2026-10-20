@@ -4,6 +4,12 @@ This document is the frontend/backend contract for replacing browser `localStora
 with Spring Boot and SQL Server. It follows `invoicing_schema_sqlserver_v5.sql`
 plus `database/migrations/20261019_01_partner_notes.sql`.
 
+Implementation status: sales and purchase invoice list, detail, draft create/update,
+posting, reset and cancellation are implemented. Cash payment list and creation
+are implemented. Invoice lists require `type=out_invoice` or `type=in_invoice`,
+return an unpaginated array, and do not yet support state/payment query filters.
+Both invoice and payment UIs use SQL Server; the reports and journal-entry UIs still use mock data.
+
 ## Principles
 
 - API paths are rooted at `/api`.
@@ -55,12 +61,16 @@ column in `Journal`.
   "phone": "0901234567",
   "address": "123 Nguyễn Văn Linh",
   "city": "Hà Nội",
-  "active": true
+  "active": true,
+  "usedInTransactions": false
 }
 ```
 
 `partnerType` is a transport/UI field mapped to the two database flags; it is
-not a new database column.
+not a new database column. `usedInTransactions` is derived from references in
+`Journal_Entry`; it is not a database column. A referenced partner cannot be
+deleted or change type, but may be deactivated. The current database enforces
+exactly one type per partner.
 
 ### ProductDto and ProductCategoryDto
 
@@ -75,7 +85,8 @@ not a new database column.
   "costPrice": 350000.00,
   "saleTaxId": 1,
   "purchaseTaxId": 2,
-  "active": true
+  "active": true,
+  "usedInTransactions": false
 }
 ```
 
@@ -84,9 +95,15 @@ not a new database column.
   "id": 1,
   "name": "Phụ kiện máy tính",
   "salesAccountId": 4,
-  "purchaseAccountId": 5
+  "purchaseAccountId": 5,
+  "productCount": 2
 }
 ```
+
+`Product.categoryId`, `code` and `uom` are required by the current database.
+`usedInTransactions` and `productCount` are calculated from existing references,
+not stored columns. Category update requests carry both account IDs; the current
+rename UI sends the existing values unchanged, including nulls.
 
 ### TaxDto
 
@@ -96,9 +113,16 @@ not a new database column.
   "name": "VAT bán 10%",
   "amount": 10.0000,
   "typeTaxUse": "sale",
-  "account": { "id": 6, "code": "3331", "name": "Thuế GTGT phải nộp" }
+  "account": { "id": 6, "code": "3331", "name": "Thuế GTGT phải nộp", "accountType": "liability", "reconcile": false },
+  "usedInTransactions": false,
+  "defaultForProduct": true
 }
 ```
+
+`account` can be null for existing database records. The two flags are calculated from
+`Journal_Item` and `Product` references respectively; they are not database columns.
+New taxes require an account. A tax used in a journal item may only be renamed;
+an incompatible product default prevents changing its type, and either reference prevents deletion.
 
 ### InvoiceDto
 
@@ -113,7 +137,7 @@ The database record is `Journal_Entry`; this DTO is used for both
   "state": "posted",
   "journal": { "id": 1, "code": "INV", "name": "Hóa đơn bán" },
   "partner": { "id": 1, "name": "Công ty ABC", "partnerType": "customer" },
-  "createdBy": { "id": 2, "userName": "ketoan", "fullName": "Trần Thị B" },
+  "createdBy": { "id": 2, "name": "Trần Thị B", "code": "ketoan" },
   "invoiceDate": "2026-10-02",
   "invoiceDateDue": "2026-11-01",
   "accountingDate": "2026-10-02",
@@ -148,8 +172,9 @@ joins `Payment.entry_id` to its `Journal_Entry` and returns a UI-friendly DTO.
   "paymentDate": "2026-10-04",
   "journal": { "id": 3, "code": "CSH", "name": "Tiền mặt" },
   "partner": { "id": 1, "name": "Công ty ABC" },
-  "createdBy": { "id": 2, "userName": "ketoan", "fullName": "Trần Thị B" },
-  "invoiceName": "INV/2026/0001"
+  "createdBy": { "id": 2, "name": "Trần Thị B", "code": "ketoan" },
+  "invoiceName": "INV/2026/0001",
+  "invoiceType": "out_invoice"
 }
 ```
 
@@ -199,7 +224,7 @@ All master-data writes require `accountant`, except the user endpoints above.
 
 | Method and path | Effect |
 | --- | --- |
-| `GET /invoices?type=out_invoice|in_invoice&state=&paymentState=` | Paginated invoice list |
+| `GET /invoices?type=out_invoice|in_invoice` | Unpaginated invoice list |
 | `GET /invoices/{id}` | Full `InvoiceDto` |
 | `POST /invoices/sales` | Create `out_invoice` draft; Partner must be customer |
 | `POST /invoices/purchases` | Create `in_invoice` draft; Partner must be supplier |
@@ -216,7 +241,7 @@ All master-data writes require `accountant`, except the user endpoints above.
 
 | Method and path | Effect |
 | --- | --- |
-| `GET /payments?type=inbound|outbound` | Payment list using `PaymentDto` |
+| `GET /payments` | Payment list using `PaymentDto`; type filtering is currently client-side |
 | `POST /payments` | Create a complete, one-time cash payment for a posted unpaid invoice |
 
 The service derives inbound/outbound, payment amount, partner, `CSH` journal and

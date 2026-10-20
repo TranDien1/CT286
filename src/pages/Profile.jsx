@@ -1,22 +1,23 @@
 import React, { useState } from 'react';
-import { useApp, api } from '../context/AppContext';
+import { useApp } from '../context/AppContext';
 import PageHeader from '../components/common/PageHeader';
 import StatusBadge from '../components/common/StatusBadge';
 
 // AUTH-07: Admin và Kế toán đổi mật khẩu của chính mình. AUTH-08: token cũ mất hiệu lực.
 export default function Profile() {
-  const { user, call } = useApp();
+  const { user, changePassword, showToast } = useApp();
   const [form, setForm] = useState({ oldPassword: '', newPassword: '', confirm: '' });
   const [error, setError] = useState('');
 
-  const submit = (e) => {
+  const submit = async (e) => {
     e.preventDefault();
     setError('');
     if (form.newPassword !== form.confirm) { setError('Mật khẩu nhập lại không khớp.'); return; }
-    const res = call(api.changeOwnPassword, [{ oldPassword: form.oldPassword, newPassword: form.newPassword }],
-      'Đã đổi mật khẩu. Các phiên đăng nhập cũ đã hết hiệu lực.');
-    if (res.ok) setForm({ oldPassword: '', newPassword: '', confirm: '' });
-    else setError(res.error);
+    try {
+      await changePassword({ oldPassword: form.oldPassword, newPassword: form.newPassword });
+      setForm({ oldPassword: '', newPassword: '', confirm: '' });
+      showToast('Đã đổi mật khẩu. Các phiên đăng nhập cũ đã hết hiệu lực.');
+    } catch (err) { setError(err.message); }
   };
 
   return (

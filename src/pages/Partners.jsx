@@ -1,7 +1,6 @@
-import React, { useMemo, useState } from 'react';
+import React, { useEffect, useMemo, useRef, useState } from 'react';
 import { useSearchParams } from 'react-router-dom';
-import { useApp, api } from '../context/AppContext';
-import { usage } from '../backend/api';
+import { useApp } from '../context/AppContext';
 import PageHeader, { ReadOnlyNotice } from '../components/common/PageHeader';
 import DataTable from '../components/common/DataTable';
 import Modal, { ConfirmModal } from '../components/common/Modal';
@@ -11,7 +10,12 @@ const EMPTY = { name: '', partnerType: 'customer', email: '', phone: '', address
 
 // CAT-01, CAT-03, CAT-06: kế toán quản lý đối tác; Admin chỉ xem; đã dùng thì không xóa, chỉ ngừng hoạt động.
 export default function Partners() {
-  const { db, call, isAccountant, isAdmin } = useApp();
+  const { request, showToast, isAccountant, isAdmin } = useApp();
+  const [partners, setPartners] = useState(null);
+  const [error, setError] = useState('');
+  const [reloadKey, setReloadKey] = useState(0);
+  const [saving, setSaving] = useState(false);
+  const pending = useRef(false);
   const [params, setParams] = useSearchParams();
   const type = params.get('type') || '';
   const [search, setSearch] = useState('');
@@ -19,17 +23,38 @@ export default function Partners() {
   const [editing, setEditing] = useState(null);
   const [deleting, setDeleting] = useState(null);
 
-  const rows = useMemo(() => db.partners
+  useEffect(() => {
+    let cancelled = false;
+    setPartners(null); setError('');
+    request('/partners').then(data => {
+      if (!cancelled) setPartners(data.map(p => ({ ...p, partnerType: p.partnerType === 'supplier' ? 'vendor' : p.partnerType,
+        taxCode: p.vat || '', email: p.email || '', phone: p.phone || '', address: p.address || '', city: p.city || '' })));
+    }).catch(err => { if (!cancelled) setError(err.message); });
+    return () => { cancelled = true; };
+  }, [reloadKey]);
+
+  const rows = useMemo(() => (partners || [])
     .filter(p => (!type || p.partnerType === type) && (showInactive || p.active))
     .filter(p => {
       const s = search.trim().toLowerCase();
       return !s || p.name.toLowerCase().includes(s) || (p.taxCode || '').includes(s) || (p.email || '').toLowerCase().includes(s);
-    })
-    .map(p => ({ ...p, used: usage.partner(db, p.id) })), [db, type, search, showInactive]);
+    }), [partners, type, search, showInactive]);
 
+  const perform = async (path, options, message, onSuccess) => {
+    if (pending.current) return;
+    pending.current = true; setSaving(true);
+    try {
+      await request(path, options);
+      showToast(message); onSuccess?.(); setReloadKey(key => key + 1);
+    } catch (err) { showToast(err.message, 'warning'); }
+    finally { pending.current = false; setSaving(false); }
+  };
   const save = () => {
-    const res = call(api.savePartner, [editing], editing.id ? 'Đã lưu đối tác.' : 'Đã thêm đối tác.');
-    if (res.ok) setEditing(null);
+    perform(editing.id ? `/partners/${editing.id}` : '/partners', {
+      method: editing.id ? 'PUT' : 'POST',
+      body: { name: editing.name, partnerType: editing.partnerType === 'vendor' ? 'supplier' : editing.partnerType,
+        vat: editing.taxCode, email: editing.email, phone: editing.phone, address: editing.address, city: editing.city }
+    }, editing.id ? 'Đã lưu đối tác.' : 'Đã thêm đối tác.', () => setEditing(null));
   };
 
   const title = type === 'customer' ? 'Khách hàng' : type === 'vendor' ? 'Nhà cung cấp' : 'Đối tác';
@@ -48,10 +73,10 @@ export default function Partners() {
         <div className="o-row-actions">
           <button type="button" className="o-btn o-btn-sm o-btn-secondary" onClick={() => setEditing({ ...r })}>Sửa</button>
           <button type="button" className="o-btn o-btn-sm o-btn-secondary"
-            onClick={() => call(api.setPartnerActive, [r.id, !r.active], r.active ? 'Đã ngừng hoạt động đối tác.' : 'Đã kích hoạt lại đối tác.')}>
+            disabled={saving} onClick={() => perform(`/partners/${r.id}/active`, { method: 'PATCH', body: { active: !r.active } }, r.active ? 'Đã ngừng hoạt động đối tác.' : 'Đã kích hoạt lại đối tác.')}>
             {r.active ? 'Ngừng hoạt động' : 'Kích hoạt'}
           </button>
-          {!r.used && <button type="button" className="o-btn o-btn-sm o-btn-danger" onClick={() => setDeleting(r)}>Xóa</button>}
+          {!r.usedInTransactions && <button type="button" className="o-btn o-btn-sm o-btn-danger" onClick={() => setDeleting(r)}>Xóa</button>}
         </div>
       )
     }] : [])
@@ -63,7 +88,7 @@ export default function Partners() {
         breadcrumb="Danh mục"
         title={title}
         actions={isAccountant && (
-          <button type="button" className="o-btn o-btn-primary" onClick={() => setEditing({ ...EMPTY, partnerType: type || 'customer' })}>Thêm đối tác</button>
+          <button type="button" className="o-btn o-btn-primary" disabled={!partners || saving} onClick={() => setEditing({ ...EMPTY, partnerType: type || 'customer' })}>Thêm đối tác</button>
         )}
       />
       {isAdmin && <ReadOnlyNotice>Admin chỉ được xem danh mục. Kế toán quản lý đối tác, sản phẩm, nhóm sản phẩm và thuế.</ReadOnlyNotice>}
@@ -78,17 +103,19 @@ export default function Partners() {
         <label className="o-check"><input type="checkbox" checked={showInactive} onChange={e => setShowInactive(e.target.checked)} /> Hiện cả đối tác ngừng hoạt động</label>
       </div>
 
-      <DataTable columns={columns} data={rows} emptyMessage="Không có đối tác nào." />
+      {error && <div className="o-notice o-notice-error" role="alert">{error} <button type="button" className="o-link-btn" onClick={() => setReloadKey(key => key + 1)}>Thử lại</button></div>}
+      {!partners && !error && <p>Đang tải đối tác từ SQL Server…</p>}
+      {partners && <DataTable columns={columns} data={rows} emptyMessage="Không có đối tác nào." />}
       <p className="text-muted o-report-note">Đối tác đã có giao dịch không xóa được, chỉ chuyển sang ngừng hoạt động.</p>
 
       <Modal
         isOpen={!!editing}
-        onClose={() => setEditing(null)}
+        onClose={() => { if (!saving) setEditing(null); }}
         title={editing?.id ? 'Sửa đối tác' : 'Thêm đối tác'}
         footer={(
           <>
-            <button type="button" className="o-btn o-btn-secondary" onClick={() => setEditing(null)}>Đóng</button>
-            <button type="button" className="o-btn o-btn-primary" onClick={save}>Lưu</button>
+            <button type="button" className="o-btn o-btn-secondary" disabled={saving} onClick={() => setEditing(null)}>Đóng</button>
+            <button type="button" className="o-btn o-btn-primary" disabled={saving} onClick={save}>Lưu</button>
           </>
         )}
       >
@@ -101,7 +128,7 @@ export default function Partners() {
             <div className="o-form-row">
               <div className="o-form-group">
                 <label className="d-block text-muted" htmlFor="ptType">Loại *</label>
-                <select id="ptType" className="w-100 p-1" value={editing.partnerType} disabled={editing.id && usage.partner(db, editing.id)}
+                <select id="ptType" className="w-100 p-1" value={editing.partnerType} disabled={editing.usedInTransactions}
                   onChange={e => setEditing({ ...editing, partnerType: e.target.value })}>
                   <option value="customer">Khách hàng</option>
                   <option value="vendor">Nhà cung cấp</option>
@@ -142,8 +169,8 @@ export default function Partners() {
         message={`Xóa "${deleting?.name}"? Đối tác này chưa có giao dịch nên được xóa hẳn.`}
         confirmLabel="Xóa"
         danger
-        onClose={() => setDeleting(null)}
-        onConfirm={() => { call(api.deletePartner, [deleting.id], 'Đã xóa đối tác.'); setDeleting(null); }}
+        onClose={() => { if (!saving) setDeleting(null); }}
+        onConfirm={() => perform(`/partners/${deleting.id}`, { method: 'DELETE' }, 'Đã xóa đối tác.', () => setDeleting(null))}
       />
     </div>
   );

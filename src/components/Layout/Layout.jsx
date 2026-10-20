@@ -5,13 +5,15 @@ import { useApp } from '../../context/AppContext';
 
 // AUTH-01: phải đăng nhập (Admin hoặc Kế toán) mới vào được hệ thống.
 export default function Layout() {
-  const { user } = useApp();
+  const { user, authLoading } = useApp();
   const location = useLocation();
+  if (authLoading) return <div className="o-page">Đang kiểm tra phiên đăng nhập…</div>;
   if (!user) return <Navigate to="/login" replace state={{ from: location.pathname + location.search }} />;
   return (
     <div className="o-app-root">
       <Navbar />
       <main className="o-main-viewport">
+        <div className="o-notice o-notice-error" role="status">Hóa đơn, phiếu thu/chi và các danh mục đã nối SQL Server; sổ bút toán và báo cáo vẫn dùng dữ liệu mẫu riêng, chưa đồng bộ.</div>
         <Outlet />
       </main>
     </div>

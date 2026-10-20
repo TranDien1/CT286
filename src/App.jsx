@@ -5,7 +5,7 @@ import Login from './pages/Login';
 import Profile from './pages/Profile';
 import Dashboard from './pages/Dashboard';
 import InvoiceList from './pages/InvoiceList';
-import InvoiceForm from './pages/InvoiceForm';
+import SalesInvoiceForm from './pages/SalesInvoiceForm';
 import Payments from './pages/Payments';
 import JournalEntries from './pages/JournalEntries';
 import Reports from './pages/Reports';
@@ -24,11 +24,11 @@ export default function App() {
         <Route path="profile" element={<Profile />} />
 
         <Route path="invoices" element={<InvoiceList type="out_invoice" />} />
-        <Route path="invoices/new" element={<InvoiceForm key="new-inv" type="out_invoice" />} />
-        <Route path="invoices/:id" element={<InvoiceForm type="out_invoice" />} />
+        <Route path="invoices/new" element={<SalesInvoiceForm key="new-inv" />} />
+        <Route path="invoices/:id" element={<SalesInvoiceForm />} />
         <Route path="bills" element={<InvoiceList type="in_invoice" />} />
-        <Route path="bills/new" element={<InvoiceForm key="new-bill" type="in_invoice" />} />
-        <Route path="bills/:id" element={<InvoiceForm type="in_invoice" />} />
+        <Route path="bills/new" element={<SalesInvoiceForm key="new-bill" type="in_invoice" />} />
+        <Route path="bills/:id" element={<SalesInvoiceForm type="in_invoice" />} />
 
         <Route path="payments" element={<Payments />} />
         <Route path="journal-entries" element={<JournalEntries />} />

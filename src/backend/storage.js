@@ -2,7 +2,7 @@
 import { buildSeedDb } from './seed';
 
 const DB_KEY = 'invoicing_db_v2';
-const TOKEN_KEY = 'invoicing_token_v2';
+const TOKEN_KEY = 'invoicing_api_token';
 
 const safeGet = (key) => { try { return localStorage.getItem(key); } catch { return null; } };
 const safeSet = (key, value) => { try { localStorage.setItem(key, value); } catch { /* bỏ qua */ } };

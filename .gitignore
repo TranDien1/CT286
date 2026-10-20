@@ -4,5 +4,9 @@ tmp/
 
 # Spring Boot
 backend/target/
-backend/.env
+
+# Local environment files; examples may be shared without secrets.
+.env
+.env.*
+!.env.example
 
