@@ -1,4 +1,4 @@
-import React, { useMemo, useState } from 'react';
+import React, { useEffect, useMemo, useState } from 'react';
 import { useNavigate } from 'react-router-dom';
 import { useApp } from '../context/AppContext';
 import { TYPE_INFO } from '../backend/rules';
@@ -20,15 +20,24 @@ const FILTERS = [
 export default function InvoiceList({ type }) {
   const info = TYPE_INFO[type];
   const navigate = useNavigate();
-  const { db, isAccountant, partnerById, userById } = useApp();
+  const { request, isAccountant } = useApp();
+  const [sales, setSales] = useState(null);
+  const [loadError, setLoadError] = useState('');
+  const [reloadKey, setReloadKey] = useState(0);
   const [search, setSearch] = useState('');
   const [filter, setFilter] = useState('all');
   const today = todayStr();
 
-  const rows = useMemo(() => db.invoices
-    .filter(i => i.entryType === type)
-    .map(i => ({ ...i, partner: partnerById(i.partnerId), status: invoiceStatusKey(i, today) }))
-    .sort((a, b) => b.id - a.id), [db, type, today]);
+  useEffect(() => {
+    let cancelled = false;
+    setSales(null); setLoadError('');
+    request(`/invoices?type=${type}`).then(data => { if (!cancelled) setSales(data); })
+      .catch(err => { if (!cancelled) setLoadError(err.message); });
+    return () => { cancelled = true; };
+  }, [type, reloadKey]);
+  const rows = useMemo(() => (sales || [])
+    .map(i => ({ ...i, status: invoiceStatusKey(i, today) }))
+    .sort((a, b) => b.id - a.id), [today, sales]);
 
   const filtered = rows.filter(r => {
     const s = search.trim().toLowerCase();
@@ -58,7 +67,7 @@ export default function InvoiceList({ type }) {
       render: r => (r.state === 'posted' && r.paymentState === 'not_paid' ? formatCurrency(r.amountTotal) : '—')
     },
     { key: 'status', label: 'Trạng thái', render: r => <StatusBadge status={r.status} /> },
-    { key: 'createdBy', label: 'Người tạo', render: r => userById(r.createdBy)?.fullName }
+    { key: 'createdBy', label: 'Người tạo', render: r => r.createdBy?.name }
   ];
 
   return (
@@ -69,7 +78,9 @@ export default function InvoiceList({ type }) {
         actions={isAccountant && <button className="o-btn o-btn-primary" onClick={() => navigate(`${info.path}/new`)}>Tạo {info.label.toLowerCase()}</button>}
       />
 
-      <div className="o-toolbar">
+      {loadError && <div className="o-notice o-notice-error" role="alert">{loadError} <button type="button" className="o-link-btn" onClick={() => setReloadKey(k => k + 1)}>Thử lại</button></div>}
+      {!sales && !loadError && <p>Đang tải hóa đơn từ SQL Server…</p>}
+      {sales && <><div className="o-toolbar">
         <input
           type="search"
           className="o-search"
@@ -98,6 +109,7 @@ export default function InvoiceList({ type }) {
         onRowClick={r => navigate(`${info.path}/${r.id}`)}
         emptyMessage="Không có hóa đơn nào khớp bộ lọc."
       />
+      </>}
     </div>
   );
 }

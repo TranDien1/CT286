@@ -1,6 +1,5 @@
-import React, { useState } from 'react';
-import { useApp, api } from '../../context/AppContext';
-import { formatDateTime } from '../../utils/format';
+import React, { useEffect, useState } from 'react';
+import { useApp } from '../../context/AppContext';
 import PageHeader from '../../components/common/PageHeader';
 import DataTable from '../../components/common/DataTable';
 import Modal, { ConfirmModal } from '../../components/common/Modal';
@@ -8,26 +7,43 @@ import StatusBadge from '../../components/common/StatusBadge';
 
 // AUTH-02/03/08/09: Admin tạo, xem, khóa/mở khóa, đặt lại mật khẩu kế toán. Không xóa tài khoản.
 export default function Users() {
-  const { db, call, user: me, showToast } = useApp();
+  const { request, user: me, showToast } = useApp();
+  const [users, setUsers] = useState([]);
   const [creating, setCreating] = useState(null);
+  const [editing, setEditing] = useState(null);
   const [resetting, setResetting] = useState(null);
   const [toggling, setToggling] = useState(null);
 
-  const create = () => {
+  const refresh = async () => { setUsers(await request('/users')); };
+  useEffect(() => { refresh().catch(error => showToast(error.message, 'warning')); }, []);
+
+  const create = async () => {
     if (creating.password !== creating.confirm) { showToast('Mật khẩu nhập lại không khớp.', 'warning'); return; }
-    const res = call(api.createAccountant, [creating], r => `Đã tạo tài khoản kế toán ${r.user.userName}.`);
-    if (res.ok) setCreating(null);
+    try {
+      await request('/users/accountants', { method: 'POST', body: creating });
+      await refresh(); setCreating(null); showToast('Đã tạo tài khoản kế toán.');
+    } catch (error) { showToast(error.message, 'warning'); }
   };
 
-  const reset = () => {
-    const res = call(api.resetPassword, [resetting.user.id, resetting.password], `Đã đặt lại mật khẩu cho ${resetting.user.userName}. Phiên đăng nhập cũ của tài khoản này đã hết hiệu lực.`);
-    if (res.ok) setResetting(null);
+  const reset = async () => {
+    try {
+      await request(`/users/${resetting.user.id}/reset-password`, { method: 'POST', body: { newPassword: resetting.password } });
+      showToast(`Đã đặt lại mật khẩu cho ${resetting.user.userName}.`); setResetting(null);
+    } catch (error) { showToast(error.message, 'warning'); }
+  };
+  const update = async () => {
+    try {
+      await request(`/users/${editing.id}`, { method: 'PUT', body: { fullName: editing.fullName, email: editing.email } });
+      await refresh(); setEditing(null); showToast('Đã cập nhật thông tin kế toán.');
+    } catch (error) { showToast(error.message, 'warning'); }
   };
 
-  const toggle = () => {
+  const toggle = async () => {
     const u = toggling;
-    call(api.setUserActive, [u.id, !u.active], u.active ? `Đã khóa ${u.userName}. Phiên đăng nhập của tài khoản này hết hiệu lực.` : `Đã mở khóa ${u.userName}.`);
-    setToggling(null);
+    try {
+      await request(`/users/${u.id}/active`, { method: 'PATCH', body: { active: !u.active } });
+      await refresh(); setToggling(null); showToast(u.active ? `Đã khóa ${u.userName}.` : `Đã mở khóa ${u.userName}.`);
+    } catch (error) { showToast(error.message, 'warning'); }
   };
 
   const columns = [
@@ -36,11 +52,11 @@ export default function Users() {
     { key: 'email', label: 'Email', render: r => r.email || '—' },
     { key: 'role', label: 'Vai trò', sortable: true, render: r => <StatusBadge status={r.role} /> },
     { key: 'active', label: 'Trạng thái', sortable: true, render: r => <StatusBadge status={r.active ? 'active' : 'locked'} /> },
-    { key: 'createdAt', label: 'Ngày tạo', sortable: true, render: r => formatDateTime(r.createdAt) },
     {
       key: 'actions', label: '', className: 'text-right o-nowrap',
       render: r => (r.role === 'accountant' && r.id !== me.id ? (
         <div className="o-row-actions">
+          <button type="button" className="o-btn o-btn-sm o-btn-secondary" onClick={() => setEditing({ ...r, email: r.email || '' })}>Sửa</button>
           <button type="button" className="o-btn o-btn-sm o-btn-secondary" onClick={() => setResetting({ user: r, password: '' })}>Đặt lại mật khẩu</button>
           <button type="button" className={`o-btn o-btn-sm ${r.active ? 'o-btn-danger' : 'o-btn-secondary'}`} onClick={() => setToggling(r)}>
             {r.active ? 'Khóa' : 'Mở khóa'}
@@ -57,8 +73,13 @@ export default function Users() {
         title="Tài khoản người dùng"
         actions={<button type="button" className="o-btn o-btn-primary" onClick={() => setCreating({ userName: '', fullName: '', email: '', password: '', confirm: '' })}>Tạo tài khoản kế toán</button>}
       />
-      <DataTable columns={columns} data={db.users} />
+      <DataTable columns={columns} data={users} />
       <p className="text-muted o-report-note">Không có đăng ký công khai và không xóa tài khoản; tài khoản không dùng nữa thì khóa lại. Khóa tài khoản hoặc đặt lại mật khẩu sẽ làm phiên đăng nhập cũ hết hiệu lực.</p>
+
+      <Modal isOpen={!!editing} onClose={() => setEditing(null)} title="Sửa thông tin kế toán" size="sm"
+        footer={<><button type="button" className="o-btn o-btn-secondary" onClick={() => setEditing(null)}>Đóng</button><button type="button" className="o-btn o-btn-primary" onClick={update}>Lưu</button></>}>
+        {editing && <div className="o-stack"><label htmlFor="editFull">Họ tên *</label><input id="editFull" value={editing.fullName} onChange={e => setEditing({ ...editing, fullName: e.target.value })} /><label htmlFor="editEmail">Email</label><input id="editEmail" type="email" value={editing.email} onChange={e => setEditing({ ...editing, email: e.target.value })} /></div>}
+      </Modal>
 
       <Modal
         isOpen={!!creating}

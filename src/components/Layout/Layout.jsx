@@ -5,8 +5,9 @@ import { useApp } from '../../context/AppContext';
 
 // AUTH-01: phải đăng nhập (Admin hoặc Kế toán) mới vào được hệ thống.
 export default function Layout() {
-  const { user } = useApp();
+  const { user, authLoading } = useApp();
   const location = useLocation();
+  if (authLoading) return <div className="o-page">Đang kiểm tra phiên đăng nhập…</div>;
   if (!user) return <Navigate to="/login" replace state={{ from: location.pathname + location.search }} />;
   return (
     <div className="o-app-root">

@@ -1,30 +1,24 @@
 import React, { useState } from 'react';
 import { Navigate, useLocation, useNavigate } from 'react-router-dom';
 import { useApp } from '../context/AppContext';
-import { ConfirmModal } from '../components/common/Modal';
-
-// AUTH-01: chỉ Admin và Kế toán đăng nhập. AUTH-02: không có đăng ký công khai.
-const DEMO_ACCOUNTS = [
-  { label: 'Admin', userName: 'admin', password: 'admin123' },
-  { label: 'Kế toán', userName: 'ketoan', password: 'ketoan123' },
-  { label: 'Kế toán 2', userName: 'ketoan2', password: 'ketoan123' }
-];
 
 export default function Login() {
-  const { user, login, resetDemo } = useApp();
+  const { user, login, authLoading } = useApp();
   const navigate = useNavigate();
   const location = useLocation();
   const [identifier, setIdentifier] = useState('');
   const [password, setPassword] = useState('');
   const [error, setError] = useState('');
-  const [confirmReset, setConfirmReset] = useState(false);
+  const [submitting, setSubmitting] = useState(false);
 
   if (user) return <Navigate to={location.state?.from || '/'} replace />;
 
-  const submit = (e) => {
+  const submit = async (e) => {
     e.preventDefault();
     setError('');
-    const res = login(identifier, password);
+    setSubmitting(true);
+    const res = await login(identifier, password);
+    setSubmitting(false);
     if (res.ok) navigate(location.state?.from || '/', { replace: true });
     else setError(res.error);
   };
@@ -48,45 +42,15 @@ export default function Login() {
             <label htmlFor="password" className="d-block text-muted">Mật khẩu</label>
             <input id="password" type="password" className="w-100 p-1" autoComplete="current-password" value={password} onChange={e => setPassword(e.target.value)} />
           </div>
-          <button type="submit" className="o-btn o-btn-primary w-100">Đăng nhập</button>
+          <button type="submit" disabled={submitting || authLoading} className="o-btn o-btn-primary w-100">{submitting ? 'Đang đăng nhập…' : 'Đăng nhập'}</button>
         </form>
 
         <p className="text-muted o-login-note">
           Không có đăng ký tài khoản công khai. Tài khoản kế toán do Admin tạo.
         </p>
 
-        <div className="o-login-demo">
-          <div className="o-login-demo-title">Tài khoản dùng thử</div>
-          <table className="o-table w-100">
-            <tbody>
-              {DEMO_ACCOUNTS.map(a => (
-                <tr key={a.userName}>
-                  <td>{a.label}</td>
-                  <td><code>{a.userName}</code></td>
-                  <td><code>{a.password}</code></td>
-                  <td className="text-right">
-                    <button type="button" className="o-btn o-btn-sm o-btn-secondary"
-                      onClick={() => { setIdentifier(a.userName); setPassword(a.password); setError(''); }}>
-                      Click me!
-                    </button>
-                  </td>
-                </tr>
-              ))}
-            </tbody>
-          </table>
-          <button type="button" className="o-link-btn" onClick={() => setConfirmReset(true)}>Khôi phục dữ liệu mẫu</button>
-        </div>
       </div>
 
-      <ConfirmModal
-        isOpen={confirmReset}
-        title="Khôi phục dữ liệu mẫu?"
-        message="Toàn bộ dữ liệu trên trình duyệt này sẽ được thay bằng dữ liệu mẫu ban đầu, kể cả mật khẩu và tài khoản đã tạo."
-        confirmLabel="Khôi phục"
-        danger
-        onClose={() => setConfirmReset(false)}
-        onConfirm={() => { resetDemo(); setConfirmReset(false); }}
-      />
     </div>
   );
 }
