@@ -78,8 +78,8 @@ class ProductService {
         if (c == null) throw bad("Dữ liệu nhóm không hợp lệ.");
         String name = required(c.name(), 128, "Tên nhóm");
         if (repo.categoryNameExists(name, id)) throw conflict("Đã có nhóm cùng tên.");
-        if (c.salesAccountId() != null && !repo.accountExists(c.salesAccountId())) throw bad("Tài khoản bán không tồn tại.");
-        if (c.purchaseAccountId() != null && !repo.accountExists(c.purchaseAccountId())) throw bad("Tài khoản mua không tồn tại.");
+        if (c.salesAccountId() == null || !repo.accountMatches(c.salesAccountId(), "income", "511")) throw bad("Vui lòng chọn tài khoản bán 511 (Doanh thu bán hàng).");
+        if (c.purchaseAccountId() == null || !repo.accountMatches(c.purchaseAccountId(), "asset", "156")) throw bad("Vui lòng chọn tài khoản mua 156 (Hàng hóa).");
         return new CategoryRequest(name,c.salesAccountId(),c.purchaseAccountId());
     }
     private String required(String value, int max, String label) {

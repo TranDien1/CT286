@@ -30,6 +30,7 @@ class PaymentSqlServerIntegrationTest {
         UserDto actor = new UserDto(userId,"test","Test",null,null,"accountant",true);
         LocalDate date = LocalDate.of(2026,10,20);
         int cashAccount = jdbc.queryForObject("SELECT default_account_id FROM dbo.Journal WHERE code='CSH'",Integer.class);
+        assertEquals("111",jdbc.queryForObject("SELECT code FROM dbo.Account WHERE id=?",String.class,cashAccount));
         for (boolean purchase : List.of(false,true)) {
             int partnerId = jdbc.queryForObject("SELECT TOP 1 id FROM dbo.Partner WHERE " + (purchase ? "is_supplier" : "is_customer") + "=1 AND active=1 ORDER BY id",Integer.class);
             int taxId = jdbc.queryForObject("SELECT TOP 1 id FROM dbo.Tax WHERE type_tax_use=? ORDER BY id",Integer.class,purchase ? "purchase" : "sale");
@@ -47,6 +48,7 @@ class PaymentSqlServerIntegrationTest {
             var cash = rows.stream().filter(r -> r.get("display_type").equals("cash")).findFirst().orElseThrow();
             var debt = rows.stream().filter(r -> r.get("display_type").equals("payment_term")).findFirst().orElseThrow();
             assertEquals(cashAccount,cash.get("account_id"));
+            assertEquals(purchase ? "331" : "131",jdbc.queryForObject("SELECT code FROM dbo.Account WHERE id=?",String.class,debt.get("account_id")));
             assertEquals(0,((BigDecimal) cash.get(purchase ? "credit" : "debit")).compareTo(posted.amountTotal()));
             assertEquals(0,((BigDecimal) debt.get(purchase ? "debit" : "credit")).compareTo(posted.amountTotal()));
             assertEquals(Boolean.TRUE,debt.get("reconciled"));

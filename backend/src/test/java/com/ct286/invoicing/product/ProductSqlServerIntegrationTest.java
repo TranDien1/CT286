@@ -20,8 +20,9 @@ class ProductSqlServerIntegrationTest {
     @Autowired JdbcTemplate jdbc;
     @Test void categoryAndProductCrudAgainstSqlServer() {
         String name = "TEST-" + UUID.randomUUID();
-        Integer account = jdbc.queryForObject("SELECT TOP 1 id FROM dbo.Account ORDER BY id", Integer.class);
-        CategoryDto category = service.createCategory(new CategoryRequest(name, account, null), "accountant");
+        Integer account = jdbc.queryForObject("SELECT id FROM dbo.Account WHERE code='511'", Integer.class);
+        Integer purchase = jdbc.queryForObject("SELECT id FROM dbo.Account WHERE code='156'", Integer.class);
+        CategoryDto category = service.createCategory(new CategoryRequest(name, account, purchase), "accountant");
         CategoryDto renamed = service.updateCategory(category.id(), new CategoryRequest(name + "-new", category.salesAccountId(), category.purchaseAccountId()), "accountant");
         assertEquals(account, renamed.salesAccountId());
         ProductRequest input = new ProductRequest("T-" + UUID.randomUUID().toString().substring(0, 20), name, category.id(), "Cái", new BigDecimal("25.50"), BigDecimal.TEN, null, null);

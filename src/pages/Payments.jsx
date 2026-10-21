@@ -51,7 +51,7 @@ export default function Payments() {
   };
 
   const submit = async () => {
-    if (!form.invoiceId || pending.current) return;
+    if (!form.invoiceId || !form.date || pending.current) return;
     pending.current = true; setSaving(true);
     try {
       const payment = await request('/payments', { method: 'POST', body: { invoiceId: Number(form.invoiceId), paymentDate: form.date } });
@@ -113,7 +113,7 @@ export default function Payments() {
         footer={(
           <>
             <button type="button" className="o-btn o-btn-secondary" disabled={saving} onClick={() => setOpen(false)}>Đóng</button>
-            <button type="button" className="o-btn o-btn-primary" onClick={submit} disabled={!form.invoiceId || saving}>Xác nhận</button>
+            <button type="button" className="o-btn o-btn-primary" onClick={submit} disabled={!form.invoiceId || !form.date || saving}>Xác nhận</button>
           </>
         )}
       >

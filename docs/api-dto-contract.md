@@ -5,10 +5,10 @@ with Spring Boot and SQL Server. It follows `invoicing_schema_sqlserver_v5.sql`
 plus `database/migrations/20261019_01_partner_notes.sql`.
 
 Implementation status: sales and purchase invoice list, detail, draft create/update,
-posting, reset and cancellation are implemented. Cash payment list and creation
+posting and draft cancellation are implemented. Posted invoices cannot be reset. Cash payment list and creation
 are implemented. Invoice lists require `type=out_invoice` or `type=in_invoice`,
 return an unpaginated array, and do not yet support state/payment query filters.
-Both invoice and payment UIs use SQL Server; the reports and journal-entry UIs still use mock data.
+Invoice, payment, report and journal-entry UIs use SQL Server. The existing dashboard still uses mock data and is deferred.
 
 ## Principles
 
@@ -21,7 +21,7 @@ Both invoice and payment UIs use SQL Server; the reports and journal-entry UIs s
 - `admin` may read all operational data and manage users. `accountant` may read
   all operational data and create/update allowed master data, invoices and cash
   payments.
-- A `Partner` has exactly one role because the UI keeps a single dropdown:
+- The current UI creates a `Partner` with one role because it keeps a single dropdown:
   `customer` maps to `is_customer=1,is_supplier=0`; `supplier` maps to
   `is_customer=0,is_supplier=1`.
 
@@ -69,8 +69,7 @@ column in `Journal`.
 `partnerType` is a transport/UI field mapped to the two database flags; it is
 not a new database column. `usedInTransactions` is derived from references in
 `Journal_Entry`; it is not a database column. A referenced partner cannot be
-deleted or change type, but may be deactivated. The current database enforces
-exactly one type per partner.
+deleted or change type, but may be deactivated. Handling an existing partner with both flags remains deferred and must be agreed before changing that flow.
 
 ### ProductDto and ProductCategoryDto
 
@@ -102,8 +101,8 @@ exactly one type per partner.
 
 `Product.categoryId`, `code` and `uom` are required by the current database.
 `usedInTransactions` and `productCount` are calculated from existing references,
-not stored columns. Category update requests carry both account IDs; the current
-rename UI sends the existing values unchanged, including nulls.
+not stored columns. Creating or updating a category requires sale and purchase accounts;
+the current scope uses account 511 for sales and 156 for purchases.
 
 ### TaxDto
 
@@ -189,6 +188,7 @@ joins `Payment.entry_id` to its `Journal_Entry` and returns a UI-friendly DTO.
 | `POST /auth/change-password` | Authenticated | `{ "oldPassword", "newPassword" }` |
 | `GET /users` | Admin | — |
 | `POST /users/accountants` | Admin | `{ "userName", "fullName", "email", "password" }` |
+| `PUT /users/{id}` | Admin | `{ "fullName", "email" }` for an accountant |
 | `PATCH /users/{id}/active` | Admin | `{ "active": true }` |
 | `POST /users/{id}/reset-password` | Admin | `{ "newPassword" }` |
 
@@ -230,7 +230,7 @@ All master-data writes require `accountant`, except the user endpoints above.
 | `POST /invoices/purchases` | Create `in_invoice` draft; Partner must be supplier |
 | `PUT /invoices/{id}` | Replace editable header/product lines of a draft |
 | `POST /invoices/{id}/post` | Validate and post; assign `Journal_Entry.name` |
-| `POST /invoices/{id}/reset-to-draft` | Only posted, unpaid invoice |
+| `POST /invoices/{id}/reset-to-draft` | Rejected: posted invoices are locked |
 | `POST /invoices/{id}/cancel` | Only draft invoice |
 
 ### Cash payments
@@ -252,18 +252,27 @@ column for it.
 
 | Method and path | Result |
 | --- | --- |
-| `GET /journal-entries?journalId=&state=` | Journal entries plus item rows |
-| `GET /reports/unpaid-invoices?type=` | Posted, unpaid invoice DTOs |
-| `GET /reports/debts` | Open 131 and 331 balances grouped by Partner |
-| `GET /reports/payments` | Cash receipts/disbursements and totals |
-| `GET /reports/overdue-invoices?type=&asOfDate=` | Posted, unpaid invoices overdue at the requested date |
+| `GET /journal-entries` | Journal entries plus item rows; the UI applies filters locally |
+| `GET /reports/debts?asOf=YYYY-MM-DD` | Open invoice debt on 131 and 331 at the end of the selected date, grouped by partner. Omit `asOf` for the existing current unreconciled-line report. |
+
+The reports page reads invoice, payment, partner and debt-report APIs. Its unpaid,
+overdue and cash summaries are calculated in the browser.
+
+For a selected day, Monday–Sunday week, or calendar month, unpaid invoices and
+debt include all previously posted invoices with an accounting date on or before
+the period end, excluding those paid on or before that end. Overdue status is
+evaluated at period end; payments are filtered within the selected period. This
+reconstructs business-date balances from current data, not a historical snapshot
+of when a document was actually posted or later changed. It assumes the approved
+one-time full-payment workflow and does not reconstruct general journal entries,
+partial payments, reversals, or prior states.
 
 ## Mandatory accounting rules in the service layer
 
 All invoice posting and payment creation is one database transaction.
 
-1. Product lines use the Product Category sale/purchase account when it is not
-   null; otherwise they use `Journal.default_account_id`.
+1. Product lines require the Product Category sale/purchase account; a missing
+   category account is an error and does not fall back to the journal.
 2. Tax rows use `Tax.account_id` and aggregate amounts by tax id.
 3. The counterpart account is the reconciliable Account with `code=131` for a
    sale and `code=331` for a purchase. It is only derived for display and

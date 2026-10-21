@@ -28,8 +28,8 @@ export default function Products() {
   useEffect(() => {
     let cancelled = false;
     setData(null); setError('');
-    Promise.all([request('/products'), request('/product-categories'), request('/taxes')])
-      .then(([products, categories, taxes]) => { if (!cancelled) setData({ products, categories, taxes }); })
+    Promise.all([request('/products'), request('/product-categories'), request('/taxes'), request('/accounts')])
+      .then(([products, categories, taxes, accounts]) => { if (!cancelled) setData({ products, categories, taxes, accounts }); })
       .catch(err => { if (!cancelled) setError(err.message); });
     return () => { cancelled = true; };
   }, [reloadKey]);
@@ -65,8 +65,8 @@ export default function Products() {
   const saveCategory = () => {
     perform(editingCat.id ? `/product-categories/${editingCat.id}` : '/product-categories', {
       method: editingCat.id ? 'PUT' : 'POST', body: { name: editingCat.name,
-        salesAccountId: editingCat.salesAccountId ?? null, purchaseAccountId: editingCat.purchaseAccountId ?? null }
-    }, editingCat.id ? 'Đã đổi tên nhóm.' : 'Đã thêm nhóm sản phẩm.', () => setEditingCat(null));
+        salesAccountId: editingCat.salesAccountId ? Number(editingCat.salesAccountId) : null, purchaseAccountId: editingCat.purchaseAccountId ? Number(editingCat.purchaseAccountId) : null }
+    }, editingCat.id ? 'Đã cập nhật nhóm.' : 'Đã thêm nhóm sản phẩm.', () => setEditingCat(null));
   };
   const doDelete = () => {
     const isProduct = deleting.kind === 'product';
@@ -139,12 +139,14 @@ export default function Products() {
             emptyMessage="Chưa có nhóm sản phẩm."
             columns={[
               { key: 'name', label: 'Tên nhóm', sortable: true, render: r => <strong>{r.name}</strong> },
+              { key: 'salesAccountId', label: 'TK bán', render: r => data.accounts.find(a => a.id === r.salesAccountId)?.code || 'Chưa cấu hình' },
+              { key: 'purchaseAccountId', label: 'TK mua', render: r => data.accounts.find(a => a.id === r.purchaseAccountId)?.code || 'Chưa cấu hình' },
               { key: 'productCount', label: 'Số sản phẩm', sortable: true, className: 'text-right num' },
               ...(isAccountant ? [{
                 key: 'actions', label: '', className: 'text-right o-nowrap',
                 render: r => (
                   <div className="o-row-actions">
-                    <button type="button" className="o-btn o-btn-sm o-btn-secondary" onClick={() => setEditingCat({ ...r })}>Đổi tên</button>
+                    <button type="button" className="o-btn o-btn-sm o-btn-secondary" onClick={() => setEditingCat({ ...r })}>Sửa</button>
                     {r.productCount === 0 && <button type="button" className="o-btn o-btn-sm o-btn-danger" onClick={() => setDeleting({ kind: 'category', item: r })}>Xóa</button>}
                   </div>
                 )
@@ -216,7 +218,7 @@ export default function Products() {
       <Modal
         isOpen={!!editingCat}
         onClose={() => { if (!saving) setEditingCat(null); }}
-        title={editingCat?.id ? 'Đổi tên nhóm' : 'Thêm nhóm sản phẩm'}
+        title={editingCat?.id ? 'Sửa nhóm sản phẩm' : 'Thêm nhóm sản phẩm'}
         size="sm"
         footer={(
           <>
@@ -226,9 +228,13 @@ export default function Products() {
         )}
       >
         {editingCat && (
-          <div className="o-form-group">
+          <div className="o-stack">
             <label className="d-block text-muted" htmlFor="catName">Tên nhóm *</label>
             <input id="catName" className="w-100 p-1" value={editingCat.name} onChange={e => setEditingCat({ ...editingCat, name: e.target.value })} />
+            <label htmlFor="catSale">Tài khoản bán (doanh thu) *</label>
+            <select id="catSale" value={editingCat.salesAccountId || ''} onChange={e => setEditingCat({ ...editingCat, salesAccountId: e.target.value })}><option value="">Chọn tài khoản</option>{data?.accounts.filter(a => a.accountType === 'income' && a.code === '511').map(a => <option key={a.id} value={a.id}>{a.code} - {a.name}</option>)}</select>
+            <label htmlFor="catPurchase">Tài khoản mua (tài sản) *</label>
+            <select id="catPurchase" value={editingCat.purchaseAccountId || ''} onChange={e => setEditingCat({ ...editingCat, purchaseAccountId: e.target.value })}><option value="">Chọn tài khoản</option>{data?.accounts.filter(a => a.accountType === 'asset' && a.code === '156').map(a => <option key={a.id} value={a.id}>{a.code} - {a.name}</option>)}</select>
           </div>
         )}
       </Modal>

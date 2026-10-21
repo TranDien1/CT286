@@ -13,6 +13,7 @@ class UserController {
     record PasswordChangeRequest(String oldPassword, String newPassword) { }
     record CreateUserRequest(String userName, String fullName, String email, String password) { }
     record ActiveRequest(Boolean active) { }
+    record UpdateUserRequest(String fullName, String email) { }
     record ResetPasswordRequest(String newPassword) { }
     private final UserService users;
     private final SessionRegistry sessions;
@@ -28,6 +29,9 @@ class UserController {
     @GetMapping("/users") List<UserDto> list(HttpServletRequest request) { return users.list(actor(request)); }
     @PostMapping("/users/accountants") @ResponseStatus(HttpStatus.CREATED)
     UserDto create(HttpServletRequest request, @RequestBody CreateUserRequest body) { return users.create(actor(request), body.userName(), body.fullName(), body.email(), body.password()); }
+    @PutMapping("/users/{id}") UserDto update(HttpServletRequest request, @PathVariable int id, @RequestBody UpdateUserRequest body) {
+        return users.updateDetails(actor(request), id, body.fullName(), body.email());
+    }
     @PatchMapping("/users/{id}/active") UserDto active(HttpServletRequest request, @PathVariable int id, @RequestBody ActiveRequest body) {
         if (body.active() == null) throw new ResponseStatusException(HttpStatus.BAD_REQUEST, "Cần cung cấp trạng thái active.");
         return users.setActive(actor(request), id, body.active());

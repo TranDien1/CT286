@@ -42,4 +42,10 @@ class ProductServiceTest {
         when(repo.product(1)).thenReturn(Optional.of(existing(false)));
         service.deleteProduct(1, "accountant"); verify(repo).deleteProduct(1);
     }
+    @Test void categoryRequiresCorrectAccountTypes() {
+        assertEquals(400, assertThrows(ResponseStatusException.class, () -> service.createCategory(new CategoryRequest("Nhóm", null, 5), "accountant")).getStatusCode().value());
+        when(repo.accountMatches(4, "income", "511")).thenReturn(true);
+        assertEquals(400, assertThrows(ResponseStatusException.class, () -> service.createCategory(new CategoryRequest("Nhóm", 4, 5), "accountant")).getStatusCode().value());
+        verify(repo, never()).insertCategory(any());
+    }
 }

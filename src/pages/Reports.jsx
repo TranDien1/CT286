@@ -1,9 +1,10 @@
-import React, { useMemo } from 'react';
+import React, { useEffect, useMemo, useState } from 'react';
 import { Link, useSearchParams } from 'react-router-dom';
 import { useApp } from '../context/AppContext';
-import { unpaidInvoices, overdueInvoices, openDebts, paymentReport, invoicePath } from '../backend/queries';
+import { unpaidInvoices, overdueInvoices, paymentReport, invoicePath } from '../backend/queries';
 import { isOverdue, TYPE_INFO } from '../backend/rules';
 import { formatCurrency, formatDate } from '../utils/format';
+import { reportPeriod, invoicesAsOf, overdueAsOf } from '../utils/reportPeriod';
 import PageHeader from '../components/common/PageHeader';
 import DataTable from '../components/common/DataTable';
 import StatusBadge from '../components/common/StatusBadge';
@@ -17,7 +18,38 @@ const TABS = [
 
 // REP-01: cả Admin và Kế toán đều xem được báo cáo.
 export default function Reports() {
-  const { db, partnerById } = useApp();
+  const { request } = useApp();
+  const [db, setDb] = useState(null);
+  const [error, setError] = useState('');
+  const [reload, setReload] = useState(0);
+  const [mode, setMode] = useState('all');
+  const [day, setDay] = useState('');
+  const [week, setWeek] = useState('');
+  const [month, setMonth] = useState('');
+  const [debts, setDebts] = useState(null);
+  const [debtError, setDebtError] = useState('');
+  const period = reportPeriod(mode, mode === 'day' ? day : mode === 'week' ? week : month);
+  useEffect(() => {
+    let cancelled = false;
+    setDb(null); setError('');
+    Promise.all([request('/invoices?type=out_invoice'), request('/invoices?type=in_invoice'), request('/payments'), request('/partners')])
+      .then(([sales, purchases, payments, partners]) => {
+        if (cancelled) return;
+        const invoices = [...sales, ...purchases].map(i => ({ ...i, partnerId: i.partner?.id, date: i.accountingDate, journalCode: i.journal?.code }));
+        setDb({ invoices, payments: payments.map(p => ({ ...p, partnerId: p.partner?.id, date: p.paymentDate })), partners });
+      }).catch(err => { if (!cancelled) setError(err.message); });
+    return () => { cancelled = true; };
+  }, [reload]);
+  useEffect(() => {
+    let cancelled = false;
+    setDebts(null); setDebtError('');
+    if (period === undefined) return () => { cancelled = true; };
+    request(`/reports/debts${period ? `?asOf=${encodeURIComponent(period.to)}` : ''}`)
+      .then(rows => { if (!cancelled) setDebts(rows); })
+      .catch(err => { if (!cancelled) setDebtError(err.message); });
+    return () => { cancelled = true; };
+  }, [reload, mode, period?.to]);
+  const partnerById = id => db?.partners.find(p => p.id === id);
   const [params, setParams] = useSearchParams();
   const tab = TABS.some(t => t.key === params.get('tab')) ? params.get('tab') : 'unpaid';
   const kind = params.get('kind') || '';
@@ -37,29 +69,47 @@ export default function Reports() {
   );
 
   // REP-02
-  const unpaid = useMemo(() => unpaidInvoices(db, kind || undefined), [db, kind]);
+  const unpaid = useMemo(() => !db || period === undefined ? [] : period
+    ? invoicesAsOf(db.invoices, db.payments, period.to, kind)
+    : unpaidInvoices(db, kind || undefined), [db, kind, mode, period?.to]);
   // REP-06
-  const overdue = useMemo(() => overdueInvoices(db, kind || undefined), [db, kind]);
+  const overdue = useMemo(() => !db || period === undefined ? [] : period
+    ? overdueAsOf(unpaid, period.to) : overdueInvoices(db, kind || undefined), [db, kind, mode, period?.to, unpaid]);
   // REP-03
-  const receivable = useMemo(() => openDebts(db, '131'), [db]);
-  const payable = useMemo(() => openDebts(db, '331'), [db]);
+  const receivable = useMemo(() => debts ? debts.filter(d => d.accountCode === '131') : [], [debts]);
+  const payable = useMemo(() => debts ? debts.filter(d => d.accountCode === '331') : [], [debts]);
   // REP-05
-  const pays = useMemo(() => paymentReport(db), [db]);
+  const pays = useMemo(() => !db || period === undefined ? [] : paymentReport(db)
+    .filter(p => !period || (p.paymentDate >= period.from && p.paymentDate <= period.to)), [db, mode, period?.from, period?.to]);
 
   const sum = (rows, f) => rows.reduce((s, r) => s + f(r), 0);
 
   return (
     <div className="o-page">
       <PageHeader breadcrumb="Báo cáo" title="Báo cáo" />
+      {error && <div className="o-notice o-notice-error" role="alert">{error} <button type="button" onClick={() => setReload(n => n + 1)}>Thử lại</button></div>}
+      {!db && !error && <p>Đang tải dữ liệu báo cáo từ SQL Server…</p>}
+      <div className="o-toolbar">
+        <label htmlFor="reportPeriod">Kỳ báo cáo</label>
+        <select id="reportPeriod" value={mode} onChange={e => setMode(e.target.value)}>
+          <option value="all">Hiện tại / Tất cả</option><option value="day">Theo ngày</option><option value="week">Theo tuần</option><option value="month">Theo tháng</option>
+        </select>
+        {mode === 'day' && <><label htmlFor="reportDay">Chọn ngày</label><input id="reportDay" type="date" value={day} onChange={e => setDay(e.target.value)} /></>}
+        {mode === 'week' && <><label htmlFor="reportWeek">Chọn một ngày trong tuần</label><input id="reportWeek" type="date" value={week} onChange={e => setWeek(e.target.value)} /></>}
+        {mode === 'month' && <><label htmlFor="reportMonth">Chọn tháng và năm</label><input id="reportMonth" type="month" value={month} onChange={e => setMonth(e.target.value)} /></>}
+        {period && <span>Kỳ: {formatDate(period.from)} – {formatDate(period.to)}</span>}
+      </div>
+      {period === undefined && <p className="o-notice o-notice-info">Vui lòng chọn thời gian báo cáo.</p>}
+      {period && <p className="text-muted o-report-note">Công nợ và hóa đơn tính đến cuối {formatDate(period.to)}; thu/chi tính trong kỳ. Số liệu được dựng theo ngày hạch toán và ngày thanh toán hiện lưu, không phải bản chụp lịch sử ghi sổ.</p>}
       <div className="o-tabs" role="tablist">
         {TABS.map(t => (
           <button key={t.key} type="button" role="tab" aria-selected={tab === t.key} className={`o-tab ${tab === t.key ? 'active' : ''}`} onClick={() => setTab(t.key)}>{t.label}</button>
         ))}
       </div>
 
-      {tab === 'unpaid' && (
+      {db && period !== undefined && tab === 'unpaid' && (
         <section className="o-stack">
-          <p className="text-muted o-report-note">Hóa đơn đã ghi sổ và chưa thanh toán. Không gồm hóa đơn nháp hoặc đã hủy.</p>
+          <p className="text-muted o-report-note">Hóa đơn đã ghi sổ và chưa thanh toán {period ? `đến cuối ${formatDate(period.to)}, bao gồm công nợ từ các kỳ trước` : 'hiện tại'}. Không gồm hóa đơn nháp hoặc đã hủy.</p>
           <div className="o-toolbar">{kindFilter}</div>
           <div className="o-summary-bar"><span>{unpaid.length} hóa đơn</span><span>Tổng còn nợ: <strong className="num">{formatCurrency(sum(unpaid, r => r.amountTotal))}</strong></span></div>
           <DataTable
@@ -71,23 +121,27 @@ export default function Reports() {
               { key: 'invoiceDate', label: 'Ngày hóa đơn', sortable: true, render: r => formatDate(r.invoiceDate) },
               { key: 'invoiceDateDue', label: 'Hạn thanh toán', sortable: true, render: r => formatDate(r.invoiceDateDue) },
               { key: 'amountTotal', label: 'Số tiền', sortable: true, className: 'text-right num', render: r => formatCurrency(r.amountTotal) },
-              { key: 'st', label: 'Tình trạng', render: r => <StatusBadge status={isOverdue(r) ? 'overdue' : 'not_paid'} /> }
+              { key: 'st', label: 'Tình trạng', render: r => <StatusBadge status={period ? (r.invoiceDateDue && r.invoiceDateDue < period.to ? 'overdue' : 'not_paid') : (isOverdue(r) ? 'overdue' : 'not_paid')} /> }
             ]}
           />
         </section>
       )}
 
-      {tab === 'debts' && (
+      {period !== undefined && tab === 'debts' && (
         <section className="o-stack">
-          <p className="text-muted o-report-note">Tính từ các dòng công nợ chưa đối soát (reconciled = 0) của bút toán đã ghi sổ. Đối tác lấy qua bút toán.</p>
+          <p className="text-muted o-report-note">{period ? 'Tính công nợ hóa đơn theo ngày hạch toán và phiếu thanh toán đến cuối kỳ, bao gồm công nợ kỳ trước.' : 'Tính từ các dòng công nợ chưa đối soát của bút toán đã ghi sổ.'}</p>
+          {debtError && <div className="o-notice o-notice-error" role="alert">{debtError} <button type="button" onClick={() => setReload(n => n + 1)}>Thử lại</button></div>}
+          {!debts && !debtError && <p>Đang tải công nợ…</p>}
+          {debts && <>
           <div className="o-grid-2">
             <DebtTable title="Phải thu khách hàng (TK 131)" rows={receivable} />
             <DebtTable title="Phải trả nhà cung cấp (TK 331)" rows={payable} />
           </div>
+          </>}
         </section>
       )}
 
-      {tab === 'payments' && (
+      {db && period !== undefined && tab === 'payments' && (
         <section className="o-stack">
           <div className="o-summary-bar">
             <span>Tổng thu: <strong className="num text-success">{formatCurrency(sum(pays.filter(p => p.paymentType === 'inbound'), p => p.amount))}</strong></span>
@@ -108,9 +162,9 @@ export default function Reports() {
         </section>
       )}
 
-      {tab === 'overdue' && (
+      {db && period !== undefined && tab === 'overdue' && (
         <section className="o-stack">
-          <p className="text-muted o-report-note">Hóa đơn đã ghi sổ, chưa thanh toán và đã qua hạn thanh toán (đúng ngày đến hạn chưa tính là quá hạn).</p>
+          <p className="text-muted o-report-note">Hóa đơn đã ghi sổ, chưa thanh toán và đã qua hạn {period ? `vào cuối ${formatDate(period.to)}` : 'hiện tại'} (đúng ngày đến hạn chưa tính là quá hạn).</p>
           <div className="o-toolbar">{kindFilter}</div>
           <div className="o-summary-bar"><span>{overdue.length} hóa đơn quá hạn</span><span>Tổng: <strong className="num text-danger">{formatCurrency(sum(overdue, r => r.amountTotal))}</strong></span></div>
           <DataTable

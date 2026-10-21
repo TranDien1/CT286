@@ -28,4 +28,20 @@ class PaymentServiceTest {
         assertEquals(409,assertThrows(ResponseStatusException.class, () -> service.create(new PaymentRequest(1,LocalDate.now()),accountant)).getStatusCode().value());
         verify(repo,never()).createEntry(anyString(),anyInt(),anyInt(),anyInt(),any());
     }
+    @Test void rejectsRepeatedPaymentAndMissingInvoiceOrDate() {
+        var request = new PaymentRequest(1,LocalDate.now());
+        assertEquals(400,assertThrows(ResponseStatusException.class, () -> service.create(new PaymentRequest(1,null),accountant)).getStatusCode().value());
+        assertEquals(404,assertThrows(ResponseStatusException.class, () -> service.create(request,accountant)).getStatusCode().value());
+        when(repo.lockInvoice(1)).thenReturn(Optional.of(new PaymentRepository.Invoice(1,"INV/2026/0001","out_invoice","posted","not_paid",1,BigDecimal.TEN)));
+        when(repo.paymentExists(1)).thenReturn(true);
+        assertEquals(409,assertThrows(ResponseStatusException.class, () -> service.create(request,accountant)).getStatusCode().value());
+        verify(repo,never()).createEntry(anyString(),anyInt(),anyInt(),anyInt(),any());
+    }
+    @Test void rejectsCashJournalWithWrongDefaultAccount() {
+        when(repo.lockInvoice(1)).thenReturn(Optional.of(new PaymentRepository.Invoice(1,"INV/2026/0001","out_invoice","posted","not_paid",1,BigDecimal.TEN)));
+        when(repo.debtItems(1,"131")).thenReturn(List.of(new PaymentRepository.DebtItem(3,2,BigDecimal.TEN,BigDecimal.ZERO,false)));
+        when(repo.cashJournal()).thenReturn(Optional.of(new PaymentRepository.CashJournal(1,5,"156")));
+        assertEquals(400,assertThrows(ResponseStatusException.class, () -> service.create(new PaymentRequest(1,LocalDate.now()),accountant)).getStatusCode().value());
+        verify(repo,never()).createEntry(anyString(),anyInt(),anyInt(),anyInt(),any());
+    }
 }

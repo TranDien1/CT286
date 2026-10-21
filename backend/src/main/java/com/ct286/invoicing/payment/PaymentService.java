@@ -34,8 +34,8 @@ public class PaymentService {
                 || (inbound ? debt.credit() : debt.debit()).signum() != 0)
             throw status(HttpStatus.CONFLICT,"Dòng công nợ không khớp số tiền hóa đơn hoặc đã đối soát.");
         PaymentRepository.CashJournal cash = repo.cashJournal().orElseThrow(() -> status(HttpStatus.BAD_REQUEST,"Chưa cấu hình sổ tiền mặt CSH."));
-        if (cash.accountId() == null || cash.accountId() == debt.accountId())
-            throw status(HttpStatus.BAD_REQUEST,"Tài khoản mặc định sổ tiền mặt không hợp lệ.");
+        if (cash.accountId() == null || !"111".equals(cash.accountCode()) || cash.accountId() == debt.accountId())
+            throw status(HttpStatus.BAD_REQUEST,"Sổ CSH phải có tài khoản mặc định 111 (Tiền mặt).");
         String name = repo.nextName(cash.id(),request.paymentDate().getYear());
         int entryId = repo.createEntry(name,cash.id(),invoice.partnerId(),actor.id(),request.paymentDate());
         BigDecimal zero = BigDecimal.ZERO, amount = invoice.total();

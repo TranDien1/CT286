@@ -10,7 +10,7 @@ import org.springframework.stereotype.Repository;
 @Repository
 class PaymentRepository {
     record Invoice(int id, String name, String type, String state, String paymentState, Integer partnerId, BigDecimal total) { }
-    record CashJournal(int id, Integer accountId) { }
+    record CashJournal(int id, Integer accountId, String accountCode) { }
     record DebtItem(int id, int accountId, BigDecimal debit, BigDecimal credit, boolean reconciled) { }
     private final JdbcTemplate jdbc;
     PaymentRepository(JdbcTemplate jdbc) { this.jdbc = jdbc; }
@@ -23,9 +23,13 @@ class PaymentRepository {
                             r.getString("payment_state"),partnerId,r.getBigDecimal("amount_total")); },id).stream().findFirst();
     }
     Optional<CashJournal> cashJournal() {
-        return jdbc.query("SELECT id,default_account_id FROM dbo.Journal WITH (UPDLOCK,HOLDLOCK) WHERE code='CSH' AND type='cash'",
-                (r,n) -> { int account = r.getInt("default_account_id"); Integer accountId = r.wasNull() ? null : account;
-                    return new CashJournal(r.getInt("id"),accountId); }).stream().findFirst();
+        return jdbc.query("""
+                SELECT j.id,j.default_account_id,a.code AS account_code
+                FROM dbo.Journal j WITH (UPDLOCK,HOLDLOCK)
+                LEFT JOIN dbo.Account a ON a.id=j.default_account_id
+                WHERE j.code='CSH' AND j.type='cash'
+                """, (r,n) -> { int account = r.getInt("default_account_id"); Integer accountId = r.wasNull() ? null : account;
+                    return new CashJournal(r.getInt("id"),accountId,r.getString("account_code")); }).stream().findFirst();
     }
     List<DebtItem> debtItems(int invoiceId, String accountCode) {
         return jdbc.query("""

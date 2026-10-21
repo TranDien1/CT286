@@ -44,16 +44,13 @@ class InvoiceSqlServerIntegrationTest {
         assertEquals("posted",posted.state());
         assertTrue(posted.name().startsWith("INV/2026/"));
         assertEquals(409,assertThrows(ResponseStatusException.class, () -> service.update(created.id(),edited,actor)).getStatusCode().value());
-        InvoiceDto reset = service.reset(created.id(),actor);
-        assertEquals("draft",reset.state());
-        assertEquals(posted.name(),reset.name());
-        InvoiceDto reposted = service.post(created.id(),actor);
-        assertEquals(posted.name(),reposted.name());
+        assertEquals(409,assertThrows(ResponseStatusException.class, () -> service.reset(created.id(),actor)).getStatusCode().value());
         InvoiceDto second = service.create(edited,actor);
         assertNotEquals(posted.name(),service.post(second.id(),actor).name());
-        service.reset(second.id(),actor);
-        assertEquals("cancel",service.cancel(second.id(),actor).state());
-        assertEquals(409,assertThrows(ResponseStatusException.class, () -> service.post(second.id(),actor)).getStatusCode().value());
+        assertEquals(409,assertThrows(ResponseStatusException.class, () -> service.cancel(second.id(),actor)).getStatusCode().value());
+        InvoiceDto cancelled = service.create(edited,actor);
+        assertEquals("cancel",service.cancel(cancelled.id(),actor).state());
+        assertEquals(409,assertThrows(ResponseStatusException.class, () -> service.post(cancelled.id(),actor)).getStatusCode().value());
     }
     @Test void purchaseUsesSupplierPurchaseTaxAndCorrectAccountingSides() {
         Integer userId = jdbc.queryForObject("SELECT TOP 1 id FROM dbo.App_User WHERE role='accountant' AND active=1 ORDER BY id",Integer.class);
@@ -86,7 +83,7 @@ class InvoiceSqlServerIntegrationTest {
                 .compareTo(draft.items().stream().map(InvoiceDto.Item::credit).reduce(BigDecimal.ZERO,BigDecimal::add)));
         InvoiceDto posted = service.post(draft.id(),actor);
         assertTrue(posted.name().startsWith("BILL/2026/"));
-        assertEquals(posted.name(),service.post(service.reset(draft.id(),actor).id(),actor).name());
+        assertEquals(409,assertThrows(ResponseStatusException.class, () -> service.reset(draft.id(),actor)).getStatusCode().value());
         assertTrue(service.listPurchases().stream().anyMatch(i -> i.id() == draft.id()));
     }
 }

@@ -1,7 +1,6 @@
 // Context dùng chung: không chứa component nên tách khỏi AppProvider.jsx
 // để Vite Fast Refresh hoạt động (file component chỉ được xuất component).
 import { createContext, useContext } from 'react';
-import * as api from '../backend/api';
 
 export const AppContext = createContext(null);
 
@@ -10,5 +9,3 @@ export const useApp = () => {
   if (!ctx) throw new Error('useApp must be used within AppProvider');
   return ctx;
 };
-
-export { api };

@@ -43,6 +43,7 @@ class ProductRepository {
         return jdbc.queryForObject("SELECT COUNT(*) FROM dbo.Product_Category WHERE LOWER(name)=LOWER(?) AND id<>?", Integer.class, name, exceptId) > 0;
     }
     boolean accountExists(int id) { return jdbc.queryForObject("SELECT COUNT(*) FROM dbo.Account WHERE id=?", Integer.class, id) > 0; }
+    boolean accountMatches(int id, String type, String code) { return jdbc.queryForObject("SELECT COUNT(*) FROM dbo.Account WHERE id=? AND account_type=? AND code=?", Integer.class, id, type, code) > 0; }
     boolean taxMatches(int id, String type) {
         return jdbc.queryForObject("SELECT COUNT(*) FROM dbo.Tax WHERE id=? AND type_tax_use=?", Integer.class, id, type) > 0;
     }

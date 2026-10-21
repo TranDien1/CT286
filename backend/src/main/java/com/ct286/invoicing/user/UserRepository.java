@@ -23,5 +23,6 @@ class UserRepository {
         jdbc.update("INSERT INTO dbo.App_User (user_name, full_name, email, password_hash, role, active) VALUES (?, ?, ?, ?, ?, 1)", name, fullName, email, hash, role);
     }
     void setActive(int id, boolean active) { jdbc.update("UPDATE dbo.App_User SET active = ? WHERE id = ?", active, id); }
+    void updateDetails(int id, String fullName, String email) { jdbc.update("UPDATE dbo.App_User SET full_name=?, email=? WHERE id=?", fullName, email, id); }
     void setPassword(int id, String hash) { jdbc.update("UPDATE dbo.App_User SET password_hash = ? WHERE id = ?", hash, id); }
 }

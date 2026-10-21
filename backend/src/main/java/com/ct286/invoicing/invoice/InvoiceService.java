@@ -91,11 +91,8 @@ class InvoiceService {
     @Transactional(isolation = Isolation.SERIALIZABLE)
     InvoiceDto reset(int id, UserDto actor) {
         requireAccountant(actor);
-        InvoiceDto old = get(id);
-        if (!"posted".equals(old.state()) || !"not_paid".equals(old.paymentState()) || repo.hasPayment(id))
-            throw conflict("Chỉ chuyển về nháp được hóa đơn đã ghi sổ và chưa thanh toán.");
-        repo.setState(id,"draft",old.name());
-        return get(id);
+        get(id);
+        throw conflict("Hóa đơn đã ghi sổ bị khóa, không hỗ trợ chuyển về nháp.");
     }
     @Transactional(isolation = Isolation.SERIALIZABLE)
     InvoiceDto cancel(int id, UserDto actor) {
@@ -140,8 +137,8 @@ class InvoiceService {
             InvoiceRepository.Tax tax = repo.tax(line.taxId()).orElseThrow(() -> bad("Thuế không tồn tại."));
             if (!(purchase ? "purchase" : "sale").equals(tax.type()) || tax.rate().signum() < 0 || tax.rate().compareTo(HUNDRED) > 0) throw bad("Loại thuế không phù hợp với hóa đơn.");
             Integer categoryAccount = purchase ? product.purchaseAccountId() : product.salesAccountId();
-            Integer account = categoryAccount != null ? categoryAccount : journal.defaultAccountId();
-            if (account == null) throw bad("Chưa cấu hình tài khoản cho nhóm sản phẩm hoặc sổ nhật ký.");
+            Integer account = categoryAccount;
+            if (account == null) throw bad("Chưa cấu hình tài khoản " + (purchase ? "mua" : "bán") + " cho nhóm sản phẩm.");
             BigDecimal subtotal = line.quantity().multiply(line.priceUnit()).setScale(0, RoundingMode.HALF_UP);
             BigDecimal taxAmount = subtotal.multiply(tax.rate()).divide(HUNDRED).setScale(0, RoundingMode.HALF_UP);
             if (taxAmount.signum() != 0 && tax.accountId() == null) throw bad("Thuế chưa có tài khoản hạch toán.");

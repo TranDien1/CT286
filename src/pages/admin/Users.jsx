@@ -10,6 +10,7 @@ export default function Users() {
   const { request, user: me, showToast } = useApp();
   const [users, setUsers] = useState([]);
   const [creating, setCreating] = useState(null);
+  const [editing, setEditing] = useState(null);
   const [resetting, setResetting] = useState(null);
   const [toggling, setToggling] = useState(null);
 
@@ -28,6 +29,12 @@ export default function Users() {
     try {
       await request(`/users/${resetting.user.id}/reset-password`, { method: 'POST', body: { newPassword: resetting.password } });
       showToast(`Đã đặt lại mật khẩu cho ${resetting.user.userName}.`); setResetting(null);
+    } catch (error) { showToast(error.message, 'warning'); }
+  };
+  const update = async () => {
+    try {
+      await request(`/users/${editing.id}`, { method: 'PUT', body: { fullName: editing.fullName, email: editing.email } });
+      await refresh(); setEditing(null); showToast('Đã cập nhật thông tin kế toán.');
     } catch (error) { showToast(error.message, 'warning'); }
   };
 
@@ -49,6 +56,7 @@ export default function Users() {
       key: 'actions', label: '', className: 'text-right o-nowrap',
       render: r => (r.role === 'accountant' && r.id !== me.id ? (
         <div className="o-row-actions">
+          <button type="button" className="o-btn o-btn-sm o-btn-secondary" onClick={() => setEditing({ ...r, email: r.email || '' })}>Sửa</button>
           <button type="button" className="o-btn o-btn-sm o-btn-secondary" onClick={() => setResetting({ user: r, password: '' })}>Đặt lại mật khẩu</button>
           <button type="button" className={`o-btn o-btn-sm ${r.active ? 'o-btn-danger' : 'o-btn-secondary'}`} onClick={() => setToggling(r)}>
             {r.active ? 'Khóa' : 'Mở khóa'}
@@ -67,6 +75,11 @@ export default function Users() {
       />
       <DataTable columns={columns} data={users} />
       <p className="text-muted o-report-note">Không có đăng ký công khai và không xóa tài khoản; tài khoản không dùng nữa thì khóa lại. Khóa tài khoản hoặc đặt lại mật khẩu sẽ làm phiên đăng nhập cũ hết hiệu lực.</p>
+
+      <Modal isOpen={!!editing} onClose={() => setEditing(null)} title="Sửa thông tin kế toán" size="sm"
+        footer={<><button type="button" className="o-btn o-btn-secondary" onClick={() => setEditing(null)}>Đóng</button><button type="button" className="o-btn o-btn-primary" onClick={update}>Lưu</button></>}>
+        {editing && <div className="o-stack"><label htmlFor="editFull">Họ tên *</label><input id="editFull" value={editing.fullName} onChange={e => setEditing({ ...editing, fullName: e.target.value })} /><label htmlFor="editEmail">Email</label><input id="editEmail" type="email" value={editing.email} onChange={e => setEditing({ ...editing, email: e.target.value })} /></div>}
+      </Modal>
 
       <Modal
         isOpen={!!creating}

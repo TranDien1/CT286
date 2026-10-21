@@ -47,6 +47,18 @@ class UserService {
     }
 
     @Transactional
+    UserDto updateDetails(UserData actor, int id, String fullName, String email) {
+        UserData target = accountant(actor, id);
+        String full = fullName == null ? "" : fullName.trim();
+        String mail = email == null || email.isBlank() ? null : email.trim();
+        if (full.isEmpty() || full.length() > 255 || (mail != null && (mail.length() > 255 || !mail.matches("^[^@\\s]+@[^@\\s]+\\.[^@\\s]+$"))))
+            throw bad("Thông tin tài khoản không hợp lệ.");
+        if (mail != null && users.byEmail(mail).stream().anyMatch(u -> u.id() != id)) throw bad("Email đã được sử dụng.");
+        users.updateDetails(id, full, mail);
+        return users.byId(target.id()).orElseThrow().dto();
+    }
+
+    @Transactional
     UserDto setActive(UserData actor, int id, boolean active) {
         UserData target = accountant(actor, id);
         users.setActive(target.id(), active);
