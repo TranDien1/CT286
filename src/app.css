@@ -183,3 +183,22 @@ button:focus-visible, a:focus-visible, .o-chip:focus-visible, .o-tab:focus-visib
   .o-page-header-row { align-items: flex-start; }
 }
 .o-btn.w-100 { justify-content: center; }
+
+/* Sổ cái đối tác */
+.o-ledger table { min-width: 960px; }
+.o-ledger-partner td { background: #f8fafc; font-weight: 600; }
+.o-ledger-toggle { background: none; border: none; padding: 0; font: inherit; font-weight: 600; color: #1e293b; cursor: pointer; display: inline-flex; align-items: center; gap: 8px; text-align: left; }
+.o-ledger-toggle::before { content: ''; width: 0; height: 0; border-top: 5px solid transparent; border-bottom: 5px solid transparent; border-left: 6px solid #64748b; transition: transform 0.15s; }
+.o-ledger-toggle.open::before { transform: rotate(90deg); }
+.o-ledger-toggle:hover { color: var(--primary-purple); }
+.o-ledger-line td:first-child { padding-left: 32px; }
+.o-ledger-line td { font-size: 12.5px; }
+.o-ledger-opening td { font-style: italic; color: var(--text-muted); }
+.o-ledger-label { display: block; font-size: 11.5px; }
+.o-ledger-notice { display: flex; justify-content: space-between; align-items: center; gap: 12px; }
+@media print {
+  .o-top-navbar, .o-no-print { display: none !important; }
+  .o-ledger table { min-width: 0; }
+  .o-page { padding: 0; }
+}
+.o-ledger th.text-right { text-align: right; }

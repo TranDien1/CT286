@@ -29,6 +29,17 @@ Mật khẩu được băm bằng BCrypt; hãy thay mật khẩu mẫu sau khi k
 - `src/pages/` – các màn hình
 
 
+## Sổ cái đối tác
+
+Menu **Báo cáo → Sổ cái đối tác** (`/partner-ledger`). Trang chỉ dùng API có sẵn
+(`/journal-entries`, `/invoices`, `/payments`), không cần sửa backend hay database.
+
+- Nhóm các dòng công nợ 131/331 của bút toán đã ghi sổ theo từng đối tác; đối tác lấy qua bút toán.
+- Bấm tên đối tác để xem từng dòng: sổ nhật ký, tài khoản, ngày, ngày đến hạn, chứng từ đã khớp, Nợ, Có, số dư lũy kế.
+- Lọc theo kỳ, tài khoản phải thu/phải trả, tên đối tác và chỉ dòng chưa khớp. Phát sinh trước kỳ cộng vào số dư đầu kỳ.
+- Số dư = Nợ − Có: dương là khách hàng còn nợ, âm là còn nợ nhà cung cấp.
+- Kiểm thử phần tính toán: `node --test src/utils/partnerLedger.test.js`.
+
 #Thong Branch
 
 ## Backend Spring Boot

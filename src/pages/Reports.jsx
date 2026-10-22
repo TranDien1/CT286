@@ -196,7 +196,7 @@ function DebtTable({ title, rows }) {
             {rows.length === 0 && <tr><td colSpan={3} className="o-empty-cell">Không còn công nợ.</td></tr>}
             {rows.map(r => (
               <tr key={r.partnerId}>
-                <td>{r.partner?.name}</td>
+                <td>{r.partnerId ? <Link to={`/partner-ledger?partner=${r.partnerId}`}>{r.partner?.name}</Link> : r.partner?.name}</td>
                 <td className="text-muted">{r.entries.join(', ')}</td>
                 <td className="text-right num">{formatCurrency(r.balance)}</td>
               </tr>

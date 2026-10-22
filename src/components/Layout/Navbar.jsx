@@ -22,7 +22,10 @@ const MENU = [
     { label: 'Sản phẩm và nhóm sản phẩm', to: '/products' },
     { label: 'Thuế', to: '/taxes' }
   ] },
-  { label: 'Báo cáo', to: '/reports' },
+  { label: 'Báo cáo', match: ['/reports', '/partner-ledger'], children: [
+    { label: 'Báo cáo tổng hợp', to: '/reports' },
+    { label: 'Sổ cái đối tác', to: '/partner-ledger' }
+  ] },
   { label: 'Người dùng', to: '/admin/users', adminOnly: true }
 ];
 
