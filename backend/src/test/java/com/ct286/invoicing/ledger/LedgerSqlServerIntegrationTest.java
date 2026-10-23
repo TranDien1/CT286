@@ -27,6 +27,8 @@ class LedgerSqlServerIntegrationTest {
         }
         var paymentIds = jdbc.queryForList("SELECT entry_id FROM dbo.Payment", Integer.class);
         for (int id : paymentIds) assertTrue(entries.stream().anyMatch(e -> e.id() == id));
+        for (var entry : entries) assertEquals(entry, controller.get(entry.id()).getBody());
+        assertEquals(404, controller.get(-1).getStatusCode().value());
     }
     @Test void debtTotalsMatchUnreconciledPostedLines() {
         var debts = reports.debts();

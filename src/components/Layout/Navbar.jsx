@@ -13,8 +13,9 @@ const MENU = [
     { label: 'Nhà cung cấp', to: '/partners?type=vendor' }
   ] },
   { label: 'Thu chi', to: '/payments' },
-  { label: 'Kế toán', match: ['/journal-entries', '/config'], children: [
+  { label: 'Kế toán', match: ['/journal-entries', '/partner-ledger', '/config'], children: [
     { label: 'Bút toán', to: '/journal-entries' },
+    { label: 'Sổ cái đối tác', to: '/partner-ledger' },
     { label: 'Tài khoản và sổ nhật ký', to: '/config' }
   ] },
   { label: 'Danh mục', match: ['/products', '/taxes', '/partners'], children: [

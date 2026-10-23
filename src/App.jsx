@@ -8,6 +8,8 @@ import InvoiceList from './pages/InvoiceList';
 import SalesInvoiceForm from './pages/SalesInvoiceForm';
 import Payments from './pages/Payments';
 import JournalEntries from './pages/JournalEntries';
+import JournalEntryDetail from './pages/JournalEntryDetail';
+import PartnerLedger from './pages/PartnerLedger';
 import Reports from './pages/Reports';
 import Partners from './pages/Partners';
 import Products from './pages/Products';
@@ -32,6 +34,8 @@ export default function App() {
 
         <Route path="payments" element={<Payments />} />
         <Route path="journal-entries" element={<JournalEntries />} />
+        <Route path="journal-entries/:id" element={<JournalEntryDetail />} />
+        <Route path="partner-ledger" element={<PartnerLedger />} />
         <Route path="reports" element={<Reports />} />
 
         <Route path="partners" element={<Partners />} />

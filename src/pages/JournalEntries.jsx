@@ -6,7 +6,6 @@ import { sumItems } from '../backend/rules';
 import { formatCurrency, formatDate } from '../utils/format';
 import PageHeader from '../components/common/PageHeader';
 import StatusBadge from '../components/common/StatusBadge';
-import EntryTable from '../components/common/EntryTable';
 
 const JOURNAL_LABEL = { INV: 'Hóa đơn bán', BILL: 'Hóa đơn mua', CSH: 'Tiền mặt' };
 
@@ -23,7 +22,6 @@ export default function JournalEntries() {
   const [journal, setJournal] = useState('');
   const [state, setState] = useState('posted');
   const [search, setSearch] = useState('');
-  const [expanded, setExpanded] = useState(null);
 
   useEffect(() => {
     let cancelled = false;
@@ -79,7 +77,6 @@ export default function JournalEntries() {
             {entries.length === 0 && <tr><td colSpan={8} className="o-empty-cell">Không có bút toán nào.</td></tr>}
             {entries.map(e => {
               const { debit, credit } = sumItems(e.items);
-              const isOpen = expanded === e.id;
               return (
                 <React.Fragment key={e.id}>
                   <tr>
@@ -95,18 +92,9 @@ export default function JournalEntries() {
                     <td className="text-right num">{formatCurrency(credit)}</td>
                     <td><StatusBadge status={e.state} /></td>
                     <td className="text-right">
-                      <button type="button" className="o-btn o-btn-sm o-btn-secondary" aria-expanded={isOpen} onClick={() => setExpanded(isOpen ? null : e.id)}>
-                        {isOpen ? 'Thu gọn' : 'Xem dòng'}
-                      </button>
+                      <Link className="o-btn o-btn-sm o-btn-secondary" to={`/journal-entries/${e.id}`}>Xem dòng</Link>
                     </td>
                   </tr>
-                  {isOpen && (
-                    <tr className="o-expand-row">
-                      <td colSpan={8}>
-                        <EntryTable title={e.name || 'Nháp'} subtitle={`Sổ ${e.journalName}`} partnerName={e.partnerName} items={e.items} accountName={code => e.items.find(i => i.accountCode === code)?.accountName || ''} />
-                      </td>
-                    </tr>
-                  )}
                 </React.Fragment>
               );
             })}

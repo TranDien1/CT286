@@ -8,6 +8,8 @@ import org.springframework.transaction.annotation.Transactional;
 import org.springframework.web.bind.annotation.GetMapping;
 import org.springframework.web.bind.annotation.RequestMapping;
 import org.springframework.web.bind.annotation.RestController;
+import org.springframework.web.bind.annotation.PathVariable;
+import org.springframework.http.ResponseEntity;
 
 @RestController
 @RequestMapping("/api/journal-entries")
@@ -23,12 +25,22 @@ public class LedgerController {
     @GetMapping
     @Transactional(readOnly = true)
     public List<Entry> list() {
+        return queryEntries("");
+    }
+
+    @GetMapping("/{id}")
+    @Transactional(readOnly = true)
+    public ResponseEntity<Entry> get(@PathVariable int id) {
+        return ResponseEntity.of(queryEntries(" WHERE e.id=?", id).stream().findFirst());
+    }
+
+    private List<Entry> queryEntries(String where, Object... args) {
         return jdbc.query("""
                 SELECT e.id,e.name,e.entry_type,e.state,e.[date],j.code journal_code,j.name journal_name,
                        p.id partner_id,p.name partner_name
                 FROM dbo.Journal_Entry e JOIN dbo.Journal j ON j.id=e.journal_id
-                LEFT JOIN dbo.Partner p ON p.id=e.partner_id ORDER BY e.[date] DESC,e.id DESC
-                """, (rs, row) -> {
+                LEFT JOIN dbo.Partner p ON p.id=e.partner_id
+                """ + where + " ORDER BY e.[date] DESC,e.id DESC", (rs, row) -> {
             int id = rs.getInt("id");
             int partner = rs.getInt("partner_id"); Integer partnerId = rs.wasNull() ? null : partner;
             return new Entry(id,rs.getString("name"),rs.getString("entry_type"),rs.getString("state"),
@@ -40,6 +52,6 @@ public class LedgerController {
                         """, (item,n) -> new Item(item.getInt("id"),item.getString("code"),item.getString("account_name"),
                         item.getString("label"),item.getString("display_type"),item.getBigDecimal("quantity"),
                         item.getBigDecimal("debit"),item.getBigDecimal("credit"),item.getBoolean("reconciled")),id));
-        });
+        }, args);
     }
 }
