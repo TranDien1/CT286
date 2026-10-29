@@ -17,6 +17,7 @@ const LABELS = {
   outbound: 'Phiếu chi',
   customer: 'Khách hàng',
   vendor: 'Nhà cung cấp',
+  both: 'Khách hàng và nhà cung cấp',
   sale: 'Bán',
   purchase: 'Mua',
   admin: 'Admin',

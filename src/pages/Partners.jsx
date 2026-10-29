@@ -1,16 +1,17 @@
 import React, { useEffect, useMemo, useRef, useState } from 'react';
 import { useSearchParams } from 'react-router-dom';
 import { useApp } from '../context/AppContext';
-import PageHeader, { ReadOnlyNotice } from '../components/common/PageHeader';
+import PageHeader from '../components/common/PageHeader';
 import DataTable from '../components/common/DataTable';
 import Modal, { ConfirmModal } from '../components/common/Modal';
 import StatusBadge from '../components/common/StatusBadge';
 
 const EMPTY = { name: '', partnerType: 'customer', email: '', phone: '', address: '', city: '', taxCode: '' };
 
-// CAT-01, CAT-03, CAT-06: kế toán quản lý đối tác; Admin chỉ xem; đã dùng thì không xóa, chỉ ngừng hoạt động.
+// Đối tác đã dùng trong giao dịch thì không xóa, chỉ ngừng hoạt động.
 export default function Partners() {
   const { request, showToast, isAccountant, isAdmin } = useApp();
+  const canManageCatalog = isAccountant || isAdmin;
   const [partners, setPartners] = useState(null);
   const [error, setError] = useState('');
   const [reloadKey, setReloadKey] = useState(0);
@@ -34,7 +35,7 @@ export default function Partners() {
   }, [reloadKey]);
 
   const rows = useMemo(() => (partners || [])
-    .filter(p => (!type || p.partnerType === type) && (showInactive || p.active))
+    .filter(p => (!type || p.partnerType === type || (p.partnerType === 'both' && ['customer', 'vendor'].includes(type))) && (showInactive || p.active))
     .filter(p => {
       const s = search.trim().toLowerCase();
       return !s || p.name.toLowerCase().includes(s) || (p.taxCode || '').includes(s) || (p.email || '').toLowerCase().includes(s);
@@ -61,17 +62,19 @@ export default function Partners() {
 
   const columns = [
     { key: 'name', label: 'Tên', sortable: true, render: r => <strong>{r.name}</strong> },
-    { key: 'partnerType', label: 'Loại', sortable: true, render: r => <StatusBadge status={r.partnerType} /> },
+    { key: 'partnerType', label: 'Loại', sortable: true, render: r => r.partnerType === 'both'
+      ? <span className="o-role-badges"><StatusBadge status="customer" /><StatusBadge status="vendor" /></span>
+      : <StatusBadge status={r.partnerType} /> },
     { key: 'taxCode', label: 'Mã số thuế', render: r => r.taxCode || '—' },
     { key: 'email', label: 'Email', render: r => r.email || '—' },
     { key: 'phone', label: 'Điện thoại', render: r => r.phone || '—' },
     { key: 'city', label: 'Tỉnh/Thành', sortable: true },
     { key: 'active', label: 'Trạng thái', sortable: true, render: r => <StatusBadge status={r.active ? 'active' : 'inactive'} /> },
-    ...(isAccountant ? [{
+    ...(canManageCatalog ? [{
       key: 'actions', label: '', className: 'text-right o-nowrap',
       render: r => (
         <div className="o-row-actions">
-          <button type="button" className="o-btn o-btn-sm o-btn-secondary" onClick={() => setEditing({ ...r })}>Sửa</button>
+          <button type="button" className="o-btn o-btn-sm o-btn-secondary" onClick={() => setEditing({ ...r, originalPartnerType: r.partnerType })}>Sửa</button>
           <button type="button" className="o-btn o-btn-sm o-btn-secondary"
             disabled={saving} onClick={() => perform(`/partners/${r.id}/active`, { method: 'PATCH', body: { active: !r.active } }, r.active ? 'Đã ngừng hoạt động đối tác.' : 'Đã kích hoạt lại đối tác.')}>
             {r.active ? 'Ngừng hoạt động' : 'Kích hoạt'}
@@ -87,16 +90,15 @@ export default function Partners() {
       <PageHeader
         breadcrumb="Danh mục"
         title={title}
-        actions={isAccountant && (
+        actions={canManageCatalog && (
           <button type="button" className="o-btn o-btn-primary" disabled={!partners || saving} onClick={() => setEditing({ ...EMPTY, partnerType: type || 'customer' })}>Thêm đối tác</button>
         )}
       />
-      {isAdmin && <ReadOnlyNotice>Admin chỉ được xem danh mục. Kế toán quản lý đối tác, sản phẩm, nhóm sản phẩm và thuế.</ReadOnlyNotice>}
 
       <div className="o-toolbar">
         <input type="search" className="o-search" aria-label="Tìm đối tác" placeholder="Tìm theo tên, mã số thuế, email..." value={search} onChange={e => setSearch(e.target.value)} />
         <div className="o-chip-group" role="group" aria-label="Lọc loại đối tác">
-          {[['', 'Tất cả'], ['customer', 'Khách hàng'], ['vendor', 'Nhà cung cấp']].map(([k, label]) => (
+          {[['', 'Tất cả'], ['customer', 'Khách hàng'], ['vendor', 'Nhà cung cấp'], ['both', 'Cả hai']].map(([k, label]) => (
             <button key={k} type="button" className={`o-chip ${type === k ? 'active' : ''}`} onClick={() => setParams(k ? { type: k } : {})}>{label}</button>
           ))}
         </div>
@@ -128,11 +130,14 @@ export default function Partners() {
             <div className="o-form-row">
               <div className="o-form-group">
                 <label className="d-block text-muted" htmlFor="ptType">Loại *</label>
-                <select id="ptType" className="w-100 p-1" value={editing.partnerType} disabled={editing.usedInTransactions}
+                <select id="ptType" className="w-100 p-1" value={editing.partnerType}
                   onChange={e => setEditing({ ...editing, partnerType: e.target.value })}>
-                  <option value="customer">Khách hàng</option>
-                  <option value="vendor">Nhà cung cấp</option>
+                  <option value="customer" disabled={editing.usedInTransactions && editing.originalPartnerType !== 'customer'}>Khách hàng</option>
+                  <option value="vendor" disabled={editing.usedInTransactions && editing.originalPartnerType !== 'vendor'}>Nhà cung cấp</option>
+                  <option value="both">Cả khách hàng và nhà cung cấp</option>
                 </select>
+                <div className="o-field-hint">Chọn “Cả khách hàng và nhà cung cấp” để dùng cùng một đối tác cho hóa đơn bán và mua.</div>
+                {editing.usedInTransactions && <div className="o-field-hint">Đã có giao dịch: có thể bổ sung vai trò, không thể bỏ vai trò cũ.</div>}
               </div>
               <div className="o-form-group">
                 <label className="d-block text-muted" htmlFor="ptTax">Mã số thuế</label>

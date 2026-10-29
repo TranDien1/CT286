@@ -2,7 +2,7 @@ import React, { useEffect, useMemo, useRef, useState } from 'react';
 import { useSearchParams } from 'react-router-dom';
 import { useApp } from '../context/AppContext';
 import { formatCurrency } from '../utils/format';
-import PageHeader, { ReadOnlyNotice } from '../components/common/PageHeader';
+import PageHeader from '../components/common/PageHeader';
 import DataTable from '../components/common/DataTable';
 import Modal, { ConfirmModal } from '../components/common/Modal';
 import StatusBadge from '../components/common/StatusBadge';
@@ -12,6 +12,7 @@ const EMPTY = { code: '', name: '', uom: 'Cái', categoryId: '', salePrice: 0, c
 // CAT-01/02/03/06/07: sản phẩm có active; nhóm sản phẩm không có active; đã dùng thì không xóa.
 export default function Products() {
   const { request, showToast, isAccountant, isAdmin } = useApp();
+  const canManageCatalog = isAccountant || isAdmin;
   const [data, setData] = useState(null);
   const [error, setError] = useState('');
   const [reloadKey, setReloadKey] = useState(0);
@@ -84,7 +85,7 @@ export default function Products() {
     { key: 'saleTaxId', label: 'Thuế bán', render: r => taxName(r.saleTaxId) },
     { key: 'purchaseTaxId', label: 'Thuế mua', render: r => taxName(r.purchaseTaxId) },
     { key: 'active', label: 'Trạng thái', sortable: true, render: r => <StatusBadge status={r.active ? 'active' : 'inactive'} /> },
-    ...(isAccountant ? [{
+    ...(canManageCatalog ? [{
       key: 'actions', label: '', className: 'text-right o-nowrap',
       render: r => (
         <div className="o-row-actions">
@@ -104,11 +105,10 @@ export default function Products() {
       <PageHeader
         breadcrumb="Danh mục"
         title="Sản phẩm và nhóm sản phẩm"
-        actions={isAccountant && (tab === 'products'
+        actions={canManageCatalog && (tab === 'products'
           ? <button type="button" className="o-btn o-btn-primary" disabled={!data || saving} onClick={() => setEditing({ ...EMPTY, saleTaxId: saleTaxes[0]?.id || '', purchaseTaxId: purchaseTaxes[0]?.id || '' })}>Thêm sản phẩm</button>
           : <button type="button" className="o-btn o-btn-primary" disabled={!data || saving} onClick={() => setEditingCat({ name: '' })}>Thêm nhóm</button>)}
       />
-      {isAdmin && <ReadOnlyNotice>Admin chỉ được xem danh mục.</ReadOnlyNotice>}
 
       <div className="o-tabs" role="tablist">
         <button type="button" role="tab" aria-selected={tab === 'products'} className={`o-tab ${tab === 'products' ? 'active' : ''}`} onClick={() => setParams({})}>Sản phẩm{data ? ` (${data.products.length})` : ''}</button>
@@ -142,7 +142,7 @@ export default function Products() {
               { key: 'salesAccountId', label: 'TK bán', render: r => data.accounts.find(a => a.id === r.salesAccountId)?.code || 'Chưa cấu hình' },
               { key: 'purchaseAccountId', label: 'TK mua', render: r => data.accounts.find(a => a.id === r.purchaseAccountId)?.code || 'Chưa cấu hình' },
               { key: 'productCount', label: 'Số sản phẩm', sortable: true, className: 'text-right num' },
-              ...(isAccountant ? [{
+              ...(canManageCatalog ? [{
                 key: 'actions', label: '', className: 'text-right o-nowrap',
                 render: r => (
                   <div className="o-row-actions">

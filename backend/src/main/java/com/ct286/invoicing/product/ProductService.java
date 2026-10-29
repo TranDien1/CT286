@@ -21,41 +21,41 @@ class ProductService {
 
     @Transactional(isolation = Isolation.SERIALIZABLE)
     ProductDto createProduct(ProductRequest input, String role) {
-        requireAccountant(role);
+        requireCatalogManager(role);
         return product(repo.insertProduct(validateProduct(input, 0)));
     }
     @Transactional(isolation = Isolation.SERIALIZABLE)
     ProductDto updateProduct(int id, ProductRequest input, String role) {
-        requireAccountant(role); product(id);
+        requireCatalogManager(role); product(id);
         repo.updateProduct(id, validateProduct(input, id));
         return product(id);
     }
     @Transactional(isolation = Isolation.SERIALIZABLE)
     ProductDto setActive(int id, Boolean active, String role) {
-        requireAccountant(role);
+        requireCatalogManager(role);
         if (active == null) throw bad("Vui lòng chọn trạng thái.");
         product(id); repo.setActive(id, active); return product(id);
     }
     @Transactional(isolation = Isolation.SERIALIZABLE)
     void deleteProduct(int id, String role) {
-        requireAccountant(role);
+        requireCatalogManager(role);
         if (product(id).usedInTransactions()) throw conflict("Sản phẩm đã dùng trong giao dịch, hãy ngừng hoạt động thay vì xóa.");
         try { repo.deleteProduct(id); }
         catch (DataIntegrityViolationException ex) { throw conflict("Sản phẩm đang được dữ liệu khác sử dụng, không thể xóa."); }
     }
     @Transactional(isolation = Isolation.SERIALIZABLE)
     CategoryDto createCategory(CategoryRequest input, String role) {
-        requireAccountant(role);
+        requireCatalogManager(role);
         return category(repo.insertCategory(validateCategory(input, 0)));
     }
     @Transactional(isolation = Isolation.SERIALIZABLE)
     CategoryDto updateCategory(int id, CategoryRequest input, String role) {
-        requireAccountant(role); category(id);
+        requireCatalogManager(role); category(id);
         repo.updateCategory(id, validateCategory(input, id)); return category(id);
     }
     @Transactional(isolation = Isolation.SERIALIZABLE)
     void deleteCategory(int id, String role) {
-        requireAccountant(role);
+        requireCatalogManager(role);
         if (category(id).productCount() > 0) throw conflict("Nhóm đang có sản phẩm nên không thể xóa.");
         try { repo.deleteCategory(id); }
         catch (DataIntegrityViolationException ex) { throw conflict("Nhóm đang được dữ liệu khác sử dụng, không thể xóa."); }
@@ -92,8 +92,8 @@ class ProductService {
         if (value == null || value.signum() < 0 || value.compareTo(MAX_PRICE) > 0 || value.stripTrailingZeros().scale() > 2)
             throw bad(label + " phải không âm và tối đa 2 chữ số thập phân.");
     }
-    private void requireAccountant(String role) {
-        if (!"accountant".equals(role)) throw new ResponseStatusException(HttpStatus.FORBIDDEN, "Chỉ kế toán được quản lý danh mục.");
+    private void requireCatalogManager(String role) {
+        if (!"accountant".equals(role) && !"admin".equals(role)) throw new ResponseStatusException(HttpStatus.FORBIDDEN, "Chỉ Admin hoặc kế toán được quản lý danh mục.");
     }
     private ResponseStatusException notFound(String name) { return new ResponseStatusException(HttpStatus.NOT_FOUND, "Không tìm thấy " + name + "."); }
     private ResponseStatusException bad(String message) { return new ResponseStatusException(HttpStatus.BAD_REQUEST, message); }

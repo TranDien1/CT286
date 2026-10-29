@@ -21,14 +21,14 @@ class TaxService {
     }
     @Transactional(isolation = Isolation.SERIALIZABLE)
     TaxDto create(TaxRequest input, String role) {
-        requireAccountant(role);
+        requireCatalogManager(role);
         TaxRequest request = validate(input, null);
         int id = repository.insert(request);
         return find(id);
     }
     @Transactional(isolation = Isolation.SERIALIZABLE)
     TaxDto update(int id, TaxRequest input, String role) {
-        requireAccountant(role);
+        requireCatalogManager(role);
         TaxDto old = find(id);
         TaxRequest request = validate(input, old);
         Integer oldAccount = old.account() == null ? null : old.account().id();
@@ -43,7 +43,7 @@ class TaxService {
     }
     @Transactional(isolation = Isolation.SERIALIZABLE)
     void delete(int id, String role) {
-        requireAccountant(role);
+        requireCatalogManager(role);
         TaxDto tax = find(id);
         if (tax.usedInTransactions() || tax.defaultForProduct())
             throw conflict("Không thể xóa thuế đã dùng trong giao dịch hoặc được sản phẩm sử dụng mặc định.");
@@ -63,12 +63,13 @@ class TaxService {
         if (!"sale".equals(input.typeTaxUse()) && !"purchase".equals(input.typeTaxUse())) throw bad("Loại thuế không hợp lệ.");
         boolean existingUsedWithoutAccount = old != null && old.usedInTransactions() && old.account() == null;
         if (input.accountId() == null && !existingUsedWithoutAccount) throw bad("Vui lòng chọn tài khoản thuế.");
-        if (input.accountId() != null && !repository.accountExists(input.accountId())) throw bad("Tài khoản thuế không tồn tại.");
+        if (input.accountId() != null && !repository.accountMatches(input.accountId(), input.typeTaxUse()))
+            throw bad("Thuế bán dùng tài khoản 3331; thuế mua dùng tài khoản 1331.");
         if (repository.nameExists(name, old == null ? 0 : old.id())) throw conflict("Tên thuế đã tồn tại.");
         return new TaxRequest(name, input.amount(), input.typeTaxUse(), input.accountId());
     }
-    private void requireAccountant(String role) {
-        if (!"accountant".equals(role)) throw new ResponseStatusException(HttpStatus.FORBIDDEN, "Chỉ kế toán được quản lý thuế.");
+    private void requireCatalogManager(String role) {
+        if (!"accountant".equals(role) && !"admin".equals(role)) throw new ResponseStatusException(HttpStatus.FORBIDDEN, "Chỉ Admin hoặc kế toán được quản lý thuế.");
     }
     private ResponseStatusException bad(String message) { return new ResponseStatusException(HttpStatus.BAD_REQUEST, message); }
     private ResponseStatusException conflict(String message) { return new ResponseStatusException(HttpStatus.CONFLICT, message); }

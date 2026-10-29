@@ -25,8 +25,19 @@ class LedgerSqlServerIntegrationTest {
             Integer lines = jdbc.queryForObject("SELECT COUNT(*) FROM dbo.Journal_Item WHERE entry_id=?", Integer.class, entry.id());
             assertEquals(lines, entry.items().size());
         }
-        var paymentIds = jdbc.queryForList("SELECT entry_id FROM dbo.Payment", Integer.class);
-        for (int id : paymentIds) assertTrue(entries.stream().anyMatch(e -> e.id() == id));
+        var payments = jdbc.queryForList("SELECT payment_for_invoice,entry_id FROM dbo.Payment");
+        for (var payment : payments) {
+            int invoiceId = (int) payment.get("payment_for_invoice");
+            int paymentEntryId = (int) payment.get("entry_id");
+            assertTrue(entries.stream().anyMatch(e -> e.id() == paymentEntryId));
+            assertEquals(paymentEntryId, entries.stream().filter(e -> e.id() == invoiceId).findFirst().orElseThrow().paymentEntryId());
+        }
+        for (var entry : entries) {
+            if (entry.entryType().equals("out_invoice") || entry.entryType().equals("in_invoice")) {
+                boolean hasPayment = payments.stream().anyMatch(p -> (int) p.get("payment_for_invoice") == entry.id());
+                if (!hasPayment) assertNull(entry.paymentEntryId());
+            }
+        }
         for (var entry : entries) assertEquals(entry, controller.get(entry.id()).getBody());
         assertEquals(404, controller.get(-1).getStatusCode().value());
     }

@@ -16,8 +16,15 @@ class ProductServiceTest {
     }
     private CategoryDto category(int count) { return new CategoryDto(1, "Nhóm", 4, 5, count); }
     private ProductDto existing(boolean used) { return new ProductDto(1,"CODE","Tên",1,"Cái",BigDecimal.ZERO,BigDecimal.ZERO,null,null,true,used); }
-    @Test void onlyAccountantCanWrite() {
-        assertEquals(403, assertThrows(ResponseStatusException.class, () -> service.createProduct(product(1,"1",null), "admin")).getStatusCode().value());
+    @Test void adminCanManageProducts() {
+        when(repo.category(1)).thenReturn(Optional.of(category(0)));
+        when(repo.insertProduct(any())).thenReturn(1);
+        when(repo.product(1)).thenReturn(Optional.of(existing(false)));
+        service.createProduct(product(1,"1",null), "admin");
+        verify(repo).insertProduct(any());
+    }
+    @Test void unknownRoleCannotWrite() {
+        assertEquals(403, assertThrows(ResponseStatusException.class, () -> service.createProduct(product(1,"1",null), "viewer")).getStatusCode().value());
         verifyNoInteractions(repo);
     }
     @Test void validatesRequiredGroupPricesAndTaxType() {

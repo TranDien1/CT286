@@ -20,11 +20,17 @@ class TaxServiceTest {
     private TaxRequest request(String name, String amount, String type, Integer accountId) {
         return new TaxRequest(name, new BigDecimal(amount), type, accountId);
     }
-    @BeforeEach void setup() { when(repository.accountExists(6)).thenReturn(true); }
+    @BeforeEach void setup() { when(repository.accountMatches(6, "sale")).thenReturn(true); }
 
-    @Test void onlyAccountantCanWrite() {
+    @Test void adminCanManageTaxes() {
+        when(repository.insert(any())).thenReturn(1);
+        when(repository.find(1)).thenReturn(Optional.of(tax(false, false)));
+        service.create(request("VAT", "10", "sale", 6), "admin");
+        verify(repository).insert(any());
+    }
+    @Test void unknownRoleCannotWrite() {
         ResponseStatusException ex = assertThrows(ResponseStatusException.class,
-                () -> service.create(request("VAT", "10", "sale", 6), "admin"));
+                () -> service.create(request("VAT", "10", "sale", 6), "viewer"));
         assertEquals(403, ex.getStatusCode().value());
         verifyNoInteractions(repository);
     }
@@ -33,6 +39,8 @@ class TaxServiceTest {
                 () -> service.create(request("VAT", "1.12345", "sale", 6), "accountant")).getStatusCode().value());
         assertEquals(400, assertThrows(ResponseStatusException.class,
                 () -> service.create(request("VAT", "10", "other", 6), "accountant")).getStatusCode().value());
+        assertEquals(400, assertThrows(ResponseStatusException.class,
+                () -> service.create(request("VAT", "10", "purchase", 6), "admin")).getStatusCode().value());
     }
     @Test void rejectsDuplicateNames() {
         when(repository.nameExists("VAT", 0)).thenReturn(true);
@@ -48,9 +56,10 @@ class TaxServiceTest {
     }
     @Test void productDefaultCannotBeChangedToIncompatibleTypeOrDeleted() {
         when(repository.find(1)).thenReturn(Optional.of(tax(false, true)));
+        when(repository.accountMatches(7, "purchase")).thenReturn(true);
         when(repository.incompatibleProductDefault(1, "purchase")).thenReturn(true);
         assertEquals(409, assertThrows(ResponseStatusException.class,
-                () -> service.update(1, request("VAT", "10", "purchase", 6), "accountant")).getStatusCode().value());
+                () -> service.update(1, request("VAT", "10", "purchase", 7), "accountant")).getStatusCode().value());
         assertEquals(409, assertThrows(ResponseStatusException.class,
                 () -> service.delete(1, "accountant")).getStatusCode().value());
         verify(repository, never()).delete(anyInt());

@@ -42,8 +42,11 @@ class TaxRepository {
         return jdbc.queryForObject("SELECT COUNT(*) FROM dbo.Tax WHERE LOWER(name) = LOWER(?) AND id <> ?",
                 Integer.class, name, exceptId) > 0;
     }
-    boolean accountExists(int id) {
-        return jdbc.queryForObject("SELECT COUNT(*) FROM dbo.Account WHERE id = ?", Integer.class, id) > 0;
+    boolean accountMatches(int id, String use) {
+        String code = "sale".equals(use) ? "3331" : "1331";
+        String accountType = "sale".equals(use) ? "liability" : "asset";
+        return jdbc.queryForObject("SELECT COUNT(*) FROM dbo.Account WHERE id = ? AND code = ? AND account_type = ?",
+                Integer.class, id, code, accountType) > 0;
     }
     boolean incompatibleProductDefault(int id, String use) {
         return jdbc.queryForObject("""

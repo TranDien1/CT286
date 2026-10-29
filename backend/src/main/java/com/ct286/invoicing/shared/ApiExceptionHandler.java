@@ -9,6 +9,7 @@ import org.springframework.http.ResponseEntity;
 import org.springframework.web.bind.MethodArgumentNotValidException;
 import org.springframework.web.bind.annotation.ExceptionHandler;
 import org.springframework.web.bind.annotation.RestControllerAdvice;
+import org.springframework.web.server.ResponseStatusException;
 
 @RestControllerAdvice
 public class ApiExceptionHandler {
@@ -16,6 +17,13 @@ public class ApiExceptionHandler {
     @ExceptionHandler({MethodArgumentNotValidException.class, ConstraintViolationException.class})
     public ResponseEntity<ApiError> handleValidation(Exception exception) {
         return error(HttpStatus.BAD_REQUEST, "VALIDATION_ERROR", "Dữ liệu gửi lên không hợp lệ.");
+    }
+
+    @ExceptionHandler(ResponseStatusException.class)
+    public ResponseEntity<ApiError> handleStatus(ResponseStatusException exception) {
+        String message = exception.getReason() == null ? "Yêu cầu không được phép." : exception.getReason();
+        return ResponseEntity.status(exception.getStatusCode())
+                .body(new ApiError(Instant.now(), exception.getStatusCode().value(), "REQUEST_REJECTED", message));
     }
 
     @ExceptionHandler(Exception.class)

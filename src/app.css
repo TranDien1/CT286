@@ -103,6 +103,7 @@
 .o-badge-vendor, .o-badge-purchase { background-color: #f5edf3; color: #714B67; border: 1px solid #e9d5e4; }
 .o-badge-admin { background-color: #f5edf3; color: #714B67; border: 1px solid #e9d5e4; }
 .o-badge-accountant { background-color: #e0f2fe; color: #0369a1; border: 1px solid #bae6fd; }
+.o-role-badges { display: inline-flex; flex-wrap: wrap; gap: 4px; }
 
 /* Thanh điều hướng */
 .o-top-navbar { position: sticky; top: env(safe-area-inset-top, 0px); z-index: 1000; gap: 12px; padding-left: max(16px, env(safe-area-inset-left, 0px)); padding-right: max(16px, env(safe-area-inset-right, 0px)); }
@@ -148,6 +149,16 @@
 .o-total-due { border-top: 1px solid #e2e8f0; padding-top: 8px; font-weight: 700; }
 .o-entry { border: 1px solid #e2e8f0; border-radius: 6px; padding: 10px; background: #fff; }
 .o-entry-head { display: flex; justify-content: space-between; gap: 8px; flex-wrap: wrap; margin-bottom: 8px; }
+.o-entry-table { min-width: 1050px; table-layout: fixed; }
+.o-entry-table col:nth-child(1) { width: 18%; }
+.o-entry-table col:nth-child(2) { width: 16%; }
+.o-entry-table col:nth-child(3) { width: 21%; }
+.o-entry-table col:nth-child(4), .o-entry-table col:nth-child(5) { width: 13%; }
+.o-entry-table col:nth-child(6) { width: 19%; }
+.o-entry-table th, .o-entry-table td { padding: 9px 12px; }
+.o-entry-table th.o-entry-amount, .o-entry-table td.o-entry-amount { text-align: right; font-variant-numeric: tabular-nums; white-space: nowrap; }
+.o-entry-table tbody td:nth-child(-n+3) { overflow-wrap: anywhere; }
+.o-reconcile-actions { display: flex; align-items: center; gap: 8px; flex-wrap: wrap; }
 .o-preview { position: relative; overflow: hidden; display: flex; flex-direction: column; gap: 14px; }
 .o-preview-head { display: flex; justify-content: space-between; gap: 12px; flex-wrap: wrap; border-bottom: 1px solid #e2e8f0; padding-bottom: 12px; }
 .o-preview-head h3 { margin: 0; }

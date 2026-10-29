@@ -31,3 +31,8 @@ export function AdminOnly({ children }) {
   }
   return children;
 }
+
+export function AccountantOnly() {
+  const { isAccountant } = useApp();
+  return isAccountant ? <Outlet /> : <Navigate to="/config" replace />;
+}

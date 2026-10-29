@@ -18,22 +18,23 @@ class PartnerService {
     }
     @Transactional(isolation = Isolation.SERIALIZABLE)
     PartnerDto create(PartnerRequest input, String role) {
-        requireAccountant(role);
+        requireCatalogManager(role);
         return find(repository.insert(validate(input, 0)));
     }
     @Transactional(isolation = Isolation.SERIALIZABLE)
     PartnerDto update(int id, PartnerRequest input, String role) {
-        requireAccountant(role);
+        requireCatalogManager(role);
         PartnerDto old = find(id);
         PartnerRequest p = validate(input, id);
-        if (old.usedInTransactions() && !old.partnerType().equals(p.partnerType()))
-            throw conflict("Đối tác đã có giao dịch nên không đổi được loại.");
+        if (old.usedInTransactions() && (hasCustomerRole(old.partnerType()) && !hasCustomerRole(p.partnerType())
+                || hasSupplierRole(old.partnerType()) && !hasSupplierRole(p.partnerType())))
+            throw conflict("Đối tác đã có giao dịch nên không thể bỏ vai trò đang dùng.");
         repository.update(id, p);
         return find(id);
     }
     @Transactional(isolation = Isolation.SERIALIZABLE)
     PartnerDto setActive(int id, Boolean active, String role) {
-        requireAccountant(role);
+        requireCatalogManager(role);
         if (active == null) throw bad("Vui lòng chọn trạng thái.");
         find(id);
         repository.setActive(id, active);
@@ -41,7 +42,7 @@ class PartnerService {
     }
     @Transactional(isolation = Isolation.SERIALIZABLE)
     void delete(int id, String role) {
-        requireAccountant(role);
+        requireCatalogManager(role);
         if (find(id).usedInTransactions()) throw conflict("Đối tác đã có giao dịch, hãy ngừng hoạt động thay vì xóa.");
         try { repository.delete(id); }
         catch (DataIntegrityViolationException ex) { throw conflict("Đối tác đang được dữ liệu khác sử dụng, không thể xóa."); }
@@ -53,7 +54,8 @@ class PartnerService {
         if (input == null || input.name() == null || input.name().isBlank()) throw bad("Vui lòng nhập tên đối tác.");
         String name = input.name().trim();
         if (name.length() > 255) throw bad("Tên đối tác tối đa 255 ký tự.");
-        if (!"customer".equals(input.partnerType()) && !"supplier".equals(input.partnerType())) throw bad("Loại đối tác không hợp lệ.");
+        if (!"customer".equals(input.partnerType()) && !"supplier".equals(input.partnerType()) && !"both".equals(input.partnerType()))
+            throw bad("Loại đối tác không hợp lệ.");
         String vat = optional(input.vat(), 32, "Mã số thuế");
         String email = optional(input.email(), 255, "Email");
         String phone = optional(input.phone(), 32, "Điện thoại");
@@ -61,7 +63,7 @@ class PartnerService {
         String city = optional(input.city(), 128, "Tỉnh/Thành");
         if (vat != null && !vat.matches("\\d{10}(-\\d{3})?")) throw bad("Mã số thuế gồm 10 chữ số hoặc 10 số kèm -XXX.");
         if (email != null && !email.matches("^[^@\\s]+@[^@\\s]+\\.[^@\\s]+$")) throw bad("Email không hợp lệ.");
-        if (repository.nameExists(name, input.partnerType(), exceptId)) throw conflict("Đã có đối tác cùng tên và cùng loại.");
+        if (repository.nameExists(name, input.partnerType(), exceptId)) throw conflict("Đã có đối tác cùng tên và vai trò này.");
         return new PartnerRequest(name, input.partnerType(), vat, email, phone, address, city);
     }
     private String optional(String value, int max, String label) {
@@ -70,8 +72,10 @@ class PartnerService {
         if (result.length() > max) throw bad(label + " tối đa " + max + " ký tự.");
         return result;
     }
-    private void requireAccountant(String role) {
-        if (!"accountant".equals(role)) throw new ResponseStatusException(HttpStatus.FORBIDDEN, "Chỉ kế toán được quản lý đối tác.");
+    private boolean hasCustomerRole(String type) { return "customer".equals(type) || "both".equals(type); }
+    private boolean hasSupplierRole(String type) { return "supplier".equals(type) || "both".equals(type); }
+    private void requireCatalogManager(String role) {
+        if (!"accountant".equals(role) && !"admin".equals(role)) throw new ResponseStatusException(HttpStatus.FORBIDDEN, "Chỉ Admin hoặc kế toán được quản lý đối tác.");
     }
     private ResponseStatusException bad(String message) { return new ResponseStatusException(HttpStatus.BAD_REQUEST, message); }
     private ResponseStatusException conflict(String message) { return new ResponseStatusException(HttpStatus.CONFLICT, message); }

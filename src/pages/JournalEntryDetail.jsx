@@ -27,7 +27,10 @@ export default function JournalEntryDetail() {
       <p>Ngày hạch toán: {formatDate(entry.date)} · Trạng thái: <StatusBadge status={entry.state} /></p>
       {['out_invoice', 'in_invoice'].includes(entry.entryType) && <p><Link to={invoicePath(entry)}>Xem hóa đơn liên quan</Link></p>}
       {entry.state !== 'posted' && <p className="text-muted">Chứng từ chưa ghi sổ không được tính vào sổ cái.</p>}
-      <EntryTable title={entry.name || 'Nháp (chưa cấp số)'} subtitle={`Sổ ${entry.journalName}`} partnerName={entry.partnerName} items={entry.items} accountName={code => entry.items.find(i => i.accountCode === code)?.accountName || ''} />
+      <EntryTable title={entry.name || 'Nháp (chưa cấp số)'} subtitle={`Sổ ${entry.journalName}`} partnerName={entry.partnerName} items={entry.items} accountName={code => entry.items.find(i => i.accountCode === code)?.accountName || ''}
+        reconciledLink={['out_invoice', 'in_invoice'].includes(entry.entryType) && entry.paymentEntryId
+          ? { to: `/journal-entries/${entry.paymentEntryId}`, label: `Xem bút toán phiếu ${entry.entryType === 'out_invoice' ? 'thu' : 'chi'}` }
+          : null} />
     </div>}
   </div>;
 }

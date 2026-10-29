@@ -35,6 +35,14 @@ class AccountingRepository {
                 rs.getString("name"), rs.getString("type"), account(rs, "default_"), account(rs, "counterpart_")));
     }
 
+    void updateAccountName(int id, String name) {
+        jdbc.update("UPDATE dbo.Account SET name=? WHERE id=?", name, id);
+    }
+
+    void updateJournal(int id, String name, Integer defaultAccountId) {
+        jdbc.update("UPDATE dbo.Journal SET name=?, default_account_id=? WHERE id=?", name, defaultAccountId, id);
+    }
+
     private AccountDto account(ResultSet rs, String prefix) throws SQLException {
         int id = rs.getInt(prefix + "id");
         if (rs.wasNull()) return null;

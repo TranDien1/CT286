@@ -1,6 +1,6 @@
 import React from 'react';
 import { Navigate, Route, Routes } from 'react-router-dom';
-import Layout, { AdminOnly } from './components/Layout/Layout';
+import Layout, { AdminOnly, AccountantOnly } from './components/Layout/Layout';
 import Login from './pages/Login';
 import Profile from './pages/Profile';
 import Dashboard from './pages/Dashboard';
@@ -22,21 +22,21 @@ export default function App() {
     <Routes>
       <Route path="/login" element={<Login />} />
       <Route path="/" element={<Layout />}>
-        <Route index element={<Dashboard />} />
         <Route path="profile" element={<Profile />} />
-
-        <Route path="invoices" element={<InvoiceList type="out_invoice" />} />
-        <Route path="invoices/new" element={<SalesInvoiceForm key="new-inv" />} />
-        <Route path="invoices/:id" element={<SalesInvoiceForm />} />
-        <Route path="bills" element={<InvoiceList type="in_invoice" />} />
-        <Route path="bills/new" element={<SalesInvoiceForm key="new-bill" type="in_invoice" />} />
-        <Route path="bills/:id" element={<SalesInvoiceForm type="in_invoice" />} />
-
-        <Route path="payments" element={<Payments />} />
-        <Route path="journal-entries" element={<JournalEntries />} />
-        <Route path="journal-entries/:id" element={<JournalEntryDetail />} />
-        <Route path="partner-ledger" element={<PartnerLedger />} />
-        <Route path="reports" element={<Reports />} />
+        <Route element={<AccountantOnly />}>
+          <Route index element={<Dashboard />} />
+          <Route path="invoices" element={<InvoiceList type="out_invoice" />} />
+          <Route path="invoices/new" element={<SalesInvoiceForm key="new-inv" />} />
+          <Route path="invoices/:id" element={<SalesInvoiceForm />} />
+          <Route path="bills" element={<InvoiceList type="in_invoice" />} />
+          <Route path="bills/new" element={<SalesInvoiceForm key="new-bill" type="in_invoice" />} />
+          <Route path="bills/:id" element={<SalesInvoiceForm type="in_invoice" />} />
+          <Route path="payments" element={<Payments />} />
+          <Route path="journal-entries" element={<JournalEntries />} />
+          <Route path="journal-entries/:id" element={<JournalEntryDetail />} />
+          <Route path="partner-ledger" element={<PartnerLedger />} />
+          <Route path="reports" element={<Reports />} />
+        </Route>
 
         <Route path="partners" element={<Partners />} />
         <Route path="products" element={<Products />} />

@@ -11,13 +11,14 @@ class PartnerRepository {
     private final JdbcTemplate jdbc;
     PartnerRepository(JdbcTemplate jdbc) { this.jdbc = jdbc; }
     private static final String SELECT = """
-            SELECT p.id, p.name, p.is_customer, p.vat, p.email, p.phone, p.address, p.city, p.active,
+            SELECT p.id, p.name, p.is_customer, p.is_supplier, p.vat, p.email, p.phone, p.address, p.city, p.active,
                    CASE WHEN EXISTS (SELECT 1 FROM dbo.Journal_Entry e WHERE e.partner_id = p.id)
                         THEN 1 ELSE 0 END AS used_in_transactions
             FROM dbo.Partner p
             """;
     private final RowMapper<PartnerDto> mapper = (rs, row) -> new PartnerDto(rs.getInt("id"), rs.getString("name"),
-            rs.getBoolean("is_customer") ? "customer" : "supplier", rs.getString("vat"), rs.getString("email"),
+            rs.getBoolean("is_customer") && rs.getBoolean("is_supplier") ? "both"
+                    : rs.getBoolean("is_customer") ? "customer" : "supplier", rs.getString("vat"), rs.getString("email"),
             rs.getString("phone"), rs.getString("address"), rs.getString("city"), rs.getBoolean("active"),
             rs.getBoolean("used_in_transactions"));
     List<PartnerDto> list(String type, Boolean active) {
@@ -31,8 +32,13 @@ class PartnerRepository {
         return jdbc.query(SELECT + " WHERE p.id = ?", mapper, id).stream().findFirst();
     }
     boolean nameExists(String name, String type, int exceptId) {
-        String flag = "customer".equals(type) ? "is_customer" : "is_supplier";
-        return jdbc.queryForObject("SELECT COUNT(*) FROM dbo.Partner WHERE LOWER(name)=LOWER(?) AND " + flag + "=1 AND id<>?",
+        String roleCondition = switch (type) {
+            case "customer" -> "is_customer=1";
+            case "supplier" -> "is_supplier=1";
+            case "both" -> "(is_customer=1 OR is_supplier=1)";
+            default -> throw new IllegalArgumentException("Loại đối tác không hợp lệ.");
+        };
+        return jdbc.queryForObject("SELECT COUNT(*) FROM dbo.Partner WHERE LOWER(name)=LOWER(?) AND " + roleCondition + " AND id<>?",
                 Integer.class, name, exceptId) > 0;
     }
     int insert(PartnerRequest p) {
@@ -40,14 +46,16 @@ class PartnerRepository {
                 INSERT INTO dbo.Partner (name, vat, email, phone, address, city, is_customer, is_supplier)
                 OUTPUT INSERTED.id VALUES (?, ?, ?, ?, ?, ?, ?, ?)
                 """, Integer.class, p.name(), p.vat(), p.email(), p.phone(), p.address(), p.city(),
-                p.partnerType().equals("customer"), p.partnerType().equals("supplier"));
+                hasCustomerRole(p.partnerType()), hasSupplierRole(p.partnerType()));
     }
     void update(int id, PartnerRequest p) {
         jdbc.update("""
                 UPDATE dbo.Partner SET name=?, vat=?, email=?, phone=?, address=?, city=?, is_customer=?, is_supplier=? WHERE id=?
                 """, p.name(), p.vat(), p.email(), p.phone(), p.address(), p.city(),
-                p.partnerType().equals("customer"), p.partnerType().equals("supplier"), id);
+                hasCustomerRole(p.partnerType()), hasSupplierRole(p.partnerType()), id);
     }
+    private boolean hasCustomerRole(String type) { return "customer".equals(type) || "both".equals(type); }
+    private boolean hasSupplierRole(String type) { return "supplier".equals(type) || "both".equals(type); }
     void setActive(int id, boolean active) { jdbc.update("UPDATE dbo.Partner SET active=? WHERE id=?", active, id); }
     void delete(int id) { jdbc.update("DELETE FROM dbo.Partner WHERE id=?", id); }
 }

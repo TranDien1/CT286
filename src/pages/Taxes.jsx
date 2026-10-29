@@ -1,6 +1,6 @@
 import React, { useEffect, useRef, useState } from 'react';
 import { useApp } from '../context/AppContext';
-import PageHeader, { ReadOnlyNotice } from '../components/common/PageHeader';
+import PageHeader from '../components/common/PageHeader';
 import DataTable from '../components/common/DataTable';
 import Modal, { ConfirmModal } from '../components/common/Modal';
 import StatusBadge from '../components/common/StatusBadge';
@@ -8,6 +8,7 @@ import StatusBadge from '../components/common/StatusBadge';
 // CAT-04: thuế đã dùng không sửa thuế suất; CAT-05: thuế bán/mua; CAT-06: kế toán quản lý; CAT-07: không có cột active.
 export default function Taxes() {
   const { request, showToast, isAccountant, isAdmin } = useApp();
+  const canManageCatalog = isAccountant || isAdmin;
   const [rows, setRows] = useState(null);
   const [accounts, setAccounts] = useState([]);
   const [error, setError] = useState('');
@@ -62,7 +63,7 @@ export default function Taxes() {
     { key: 'amount', label: 'Thuế suất', sortable: true, className: 'text-right num', render: r => `${r.amount}%` },
     { key: 'account', label: 'Tài khoản', render: r => r.account ? `${r.account.code} ${r.account.name}` : '—' },
     { key: 'usedInTransactions', label: 'Đã dùng trong giao dịch', render: r => (r.usedInTransactions ? 'Có' : 'Chưa') },
-    ...(isAccountant ? [{
+    ...(canManageCatalog ? [{
       key: 'actions', label: '', className: 'text-right o-nowrap',
       render: r => (
         <div className="o-row-actions">
@@ -78,11 +79,10 @@ export default function Taxes() {
       <PageHeader
         breadcrumb="Danh mục"
         title="Thuế"
-        actions={isAccountant && (
+        actions={canManageCatalog && (
           <button type="button" className="o-btn o-btn-primary" disabled={!rows} onClick={() => setEditing({ name: '', amount: 10, typeTaxUse: 'sale', accountId: defaultAccountId('sale') })}>Thêm thuế</button>
         )}
       />
-      {isAdmin && <ReadOnlyNotice>Admin chỉ được xem danh mục thuế.</ReadOnlyNotice>}
       {error && <div className="o-notice o-notice-error" role="alert">{error} <button type="button" className="o-link-btn" onClick={() => setReloadKey(key => key + 1)}>Thử lại</button></div>}
       {!rows && !error && <p>Đang tải thuế từ SQL Server…</p>}
       {rows && <DataTable columns={columns} data={rows} />}
@@ -125,7 +125,7 @@ export default function Taxes() {
               <label className="d-block text-muted" htmlFor="txAcc">Tài khoản thuế *</label>
               <select id="txAcc" className="w-100 p-1" value={editing.accountId} disabled={editingUsed} onChange={e => setEditing({ ...editing, accountId: e.target.value })}>
                 <option value="">Chọn tài khoản</option>
-                {accounts.map(a => <option key={a.id} value={a.id}>{a.code} {a.name}</option>)}
+                {accounts.filter(a => a.code === (editing.typeTaxUse === 'sale' ? '3331' : '1331')).map(a => <option key={a.id} value={a.id}>{a.code} {a.name}</option>)}
               </select>
             </div>
           </div>

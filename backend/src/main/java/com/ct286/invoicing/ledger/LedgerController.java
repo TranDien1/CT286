@@ -18,7 +18,7 @@ public class LedgerController {
                 BigDecimal quantity, BigDecimal debit, BigDecimal credit, boolean reconciled) { }
     record Entry(int id, String name, String entryType, String state, LocalDate date,
                  String journalCode, String journalName, Integer partnerId, String partnerName,
-                 List<Item> items) { }
+                 Integer paymentEntryId, List<Item> items) { }
     private final JdbcTemplate jdbc;
     public LedgerController(JdbcTemplate jdbc) { this.jdbc = jdbc; }
 
@@ -37,15 +37,17 @@ public class LedgerController {
     private List<Entry> queryEntries(String where, Object... args) {
         return jdbc.query("""
                 SELECT e.id,e.name,e.entry_type,e.state,e.[date],j.code journal_code,j.name journal_name,
-                       p.id partner_id,p.name partner_name
+                       p.id partner_id,p.name partner_name,payment.entry_id payment_entry_id
                 FROM dbo.Journal_Entry e JOIN dbo.Journal j ON j.id=e.journal_id
                 LEFT JOIN dbo.Partner p ON p.id=e.partner_id
+                LEFT JOIN dbo.Payment payment ON payment.payment_for_invoice=e.id
                 """ + where + " ORDER BY e.[date] DESC,e.id DESC", (rs, row) -> {
             int id = rs.getInt("id");
             int partner = rs.getInt("partner_id"); Integer partnerId = rs.wasNull() ? null : partner;
+            int paymentEntry = rs.getInt("payment_entry_id"); Integer paymentEntryId = rs.wasNull() ? null : paymentEntry;
             return new Entry(id,rs.getString("name"),rs.getString("entry_type"),rs.getString("state"),
                     rs.getObject("date",LocalDate.class),rs.getString("journal_code"),rs.getString("journal_name"),
-                    partnerId,rs.getString("partner_name"),jdbc.query("""
+                    partnerId,rs.getString("partner_name"),paymentEntryId,jdbc.query("""
                         SELECT i.id,a.code,a.name account_name,i.name label,i.display_type,i.quantity,i.debit,i.credit,i.reconciled
                         FROM dbo.Journal_Item i JOIN dbo.Account a ON a.id=i.account_id
                         WHERE i.entry_id=? ORDER BY i.id

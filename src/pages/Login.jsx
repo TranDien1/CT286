@@ -11,7 +11,7 @@ export default function Login() {
   const [error, setError] = useState('');
   const [submitting, setSubmitting] = useState(false);
 
-  if (user) return <Navigate to={location.state?.from || '/'} replace />;
+  if (user) return <Navigate to={location.state?.from || (user.role === 'admin' ? '/config' : '/')} replace />;
 
   const submit = async (e) => {
     e.preventDefault();
@@ -19,7 +19,7 @@ export default function Login() {
     setSubmitting(true);
     const res = await login(identifier, password);
     setSubmitting(false);
-    if (res.ok) navigate(location.state?.from || '/', { replace: true });
+    if (res.ok) navigate(location.state?.from || (res.user.role === 'admin' ? '/config' : '/'), { replace: true });
     else setError(res.error);
   };
 

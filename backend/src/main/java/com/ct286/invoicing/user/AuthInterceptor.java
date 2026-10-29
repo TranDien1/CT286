@@ -28,6 +28,9 @@ public class AuthInterceptor implements HandlerInterceptor {
         String token = authorization.substring(7);
         UserData user = sessions.resolve(token);
         if (user == null) throw unauthorized();
+        String path = request.getRequestURI().substring(request.getContextPath().length());
+        if (accountantOnlyPath(path) && !"accountant".equals(user.role()))
+            throw new ResponseStatusException(HttpStatus.FORBIDDEN, "Chỉ kế toán được xem dữ liệu nghiệp vụ.");
         request.setAttribute(USER_ATTRIBUTE, user);
         request.setAttribute(TOKEN_ATTRIBUTE, token);
         return true;
@@ -35,5 +38,12 @@ public class AuthInterceptor implements HandlerInterceptor {
 
     private ResponseStatusException unauthorized() {
         return new ResponseStatusException(HttpStatus.UNAUTHORIZED, "Phiên đăng nhập không hợp lệ hoặc đã hết hạn.");
+    }
+
+    private boolean accountantOnlyPath(String path) {
+        return path.equals("/api/invoices") || path.startsWith("/api/invoices/")
+                || path.equals("/api/journal-entries") || path.startsWith("/api/journal-entries/")
+                || path.equals("/api/payments") || path.startsWith("/api/payments/")
+                || path.equals("/api/reports") || path.startsWith("/api/reports/");
     }
 }

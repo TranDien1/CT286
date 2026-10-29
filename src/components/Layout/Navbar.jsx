@@ -3,19 +3,19 @@ import { Link, NavLink, useLocation, useNavigate } from 'react-router-dom';
 import { useApp } from '../../context/AppContext';
 
 const MENU = [
-  { label: 'Tổng quan', to: '/', end: true },
-  { label: 'Bán hàng', match: ['/invoices'], children: [
+  { label: 'Tổng quan', to: '/', end: true, accountantOnly: true },
+  { label: 'Bán hàng', match: ['/invoices'], accountantOnly: true, children: [
     { label: 'Hóa đơn bán', to: '/invoices' },
     { label: 'Khách hàng', to: '/partners?type=customer' }
   ] },
-  { label: 'Mua hàng', match: ['/bills'], children: [
+  { label: 'Mua hàng', match: ['/bills'], accountantOnly: true, children: [
     { label: 'Hóa đơn mua', to: '/bills' },
     { label: 'Nhà cung cấp', to: '/partners?type=vendor' }
   ] },
-  { label: 'Thu chi', to: '/payments' },
+  { label: 'Thu chi', to: '/payments', accountantOnly: true },
   { label: 'Kế toán', match: ['/journal-entries', '/partner-ledger', '/config'], children: [
-    { label: 'Bút toán', to: '/journal-entries' },
-    { label: 'Sổ cái đối tác', to: '/partner-ledger' },
+    { label: 'Bút toán', to: '/journal-entries', accountantOnly: true },
+    { label: 'Sổ cái đối tác', to: '/partner-ledger', accountantOnly: true },
     { label: 'Tài khoản và sổ nhật ký', to: '/config' }
   ] },
   { label: 'Danh mục', match: ['/products', '/taxes', '/partners'], children: [
@@ -23,7 +23,7 @@ const MENU = [
     { label: 'Sản phẩm và nhóm sản phẩm', to: '/products' },
     { label: 'Thuế', to: '/taxes' }
   ] },
-  { label: 'Báo cáo', to: '/reports' },
+  { label: 'Báo cáo', to: '/reports', accountantOnly: true },
   { label: 'Người dùng', to: '/admin/users', adminOnly: true }
 ];
 
@@ -41,7 +41,8 @@ export default function Navbar() {
     return () => document.removeEventListener('mousedown', close);
   }, []);
 
-  const items = MENU.filter(m => !m.adminOnly || isAdmin);
+  const items = MENU.filter(m => (!m.adminOnly || isAdmin) && (!m.accountantOnly || !isAdmin))
+    .map(m => m.children ? { ...m, children: m.children.filter(c => !c.accountantOnly || !isAdmin) } : m);
   const isActive = (m) => (m.match || []).some(p => location.pathname.startsWith(p));
 
   const handleLogout = () => { logout(); navigate('/login'); };
@@ -49,7 +50,7 @@ export default function Navbar() {
   return (
     <header className="o-top-navbar" ref={ref}>
       <div className="o-nav-left">
-        <Link to="/" className="o-nav-brand"><span className="o-app-title">Hóa đơn</span></Link>
+        <Link to={isAdmin ? '/config' : '/'} className="o-nav-brand"><span className="o-app-title">Hóa đơn</span></Link>
         <nav className="o-nav-links o-nav-desktop" aria-label="Menu chính">
           {items.map(m => (m.children ? (
             <div className="o-dropdown" key={m.label}>

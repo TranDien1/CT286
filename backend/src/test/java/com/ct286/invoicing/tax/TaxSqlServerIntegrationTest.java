@@ -20,7 +20,7 @@ class TaxSqlServerIntegrationTest {
     @Autowired JdbcTemplate jdbc;
 
     @Test void readsAndWritesTaxAgainstSqlServer() {
-        Integer accountId = jdbc.queryForObject("SELECT TOP 1 id FROM dbo.Account ORDER BY id", Integer.class);
+        Integer accountId = jdbc.queryForObject("SELECT id FROM dbo.Account WHERE code='3331'", Integer.class);
         assertNotNull(accountId);
         String name = "TEST-" + UUID.randomUUID();
         TaxDto created = service.create(new TaxRequest(name, new BigDecimal("5.1250"), "sale", accountId), "accountant");
