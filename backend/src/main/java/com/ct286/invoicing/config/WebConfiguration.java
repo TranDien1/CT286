@@ -31,6 +31,7 @@ public class WebConfiguration implements WebMvcConfigurer {
                 .allowedOrigins(allowedOrigins.toArray(String[]::new))
                 .allowedMethods("GET", "POST", "PUT", "PATCH", "DELETE", "OPTIONS")
                 .allowedHeaders("Content-Type", "Authorization")
+                .exposedHeaders("Content-Disposition")
                 .maxAge(3600);
     }
 }

@@ -1,6 +1,6 @@
 import React, { useCallback, useEffect, useRef, useState } from 'react';
 import { loadToken, saveToken, STORAGE_KEYS } from '../backend/storage';
-import { requestApi } from '../backend/http';
+import { requestApi, requestPdfApi } from '../backend/http';
 import { AppContext } from './AppContext';
 
 export function AppProvider({ children }) {
@@ -44,6 +44,27 @@ export function AppProvider({ children }) {
       throw error;
     }
   };
+  const downloadInvoicePdf = async (id, entryType = 'out_invoice') => {
+    let pdf;
+    try {
+      pdf = await requestPdfApi(`/invoices/${id}/pdf`, {
+        token: tokenRef.current,
+        fallbackFilename: `${entryType === 'in_invoice' ? 'hoa-don-mua' : 'hoa-don-ban'}-${id}.pdf`
+      });
+    } catch (error) {
+      if (error.status === 401) { commitToken(null); setUser(null); }
+      throw error;
+    }
+    const url = URL.createObjectURL(pdf.blob);
+    const link = document.createElement('a');
+    link.href = url;
+    link.download = pdf.filename;
+    document.body.appendChild(link);
+    try { link.click(); } finally {
+      link.remove();
+      window.setTimeout(() => URL.revokeObjectURL(url), 60000);
+    }
+  };
   const login = async (identifier, password) => {
     try {
       const result = await requestApi('/auth/login', { method: 'POST', body: { identifier, password } });
@@ -64,7 +85,7 @@ export function AppProvider({ children }) {
 
   const value = {
     user, authLoading, isAdmin: user?.role === 'admin', isAccountant: user?.role === 'accountant',
-    login, logout, request, changePassword, showToast
+    login, logout, request, downloadInvoicePdf, changePassword, showToast
   };
   return <AppContext.Provider value={value}>
     {children}

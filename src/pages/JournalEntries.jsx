@@ -4,6 +4,7 @@ import { useApp } from '../context/AppContext';
 import { invoicePath } from '../backend/queries';
 import { sumItems } from '../backend/rules';
 import { formatCurrency, formatDate } from '../utils/format';
+import { reportPeriod } from '../utils/reportPeriod';
 import PageHeader from '../components/common/PageHeader';
 import StatusBadge from '../components/common/StatusBadge';
 
@@ -15,6 +16,8 @@ export default function JournalEntries() {
   const [data, setData] = useState(null);
   const [error, setError] = useState('');
   const [reload, setReload] = useState(0);
+  const [periodMode, setPeriodMode] = useState('all');
+  const [periodValue, setPeriodValue] = useState({ day: '', week: '', month: '', year: '' });
   const [from, setFrom] = useState('');
   const [to, setTo] = useState('');
   const [account, setAccount] = useState('');
@@ -31,14 +34,19 @@ export default function JournalEntries() {
       .catch(err => { if (!cancelled) setError(err.message); });
     return () => { cancelled = true; };
   }, [reload]);
-  const entries = useMemo(() => (data?.entries || [])
+  const period = periodMode === 'custom' ? { from, to } : reportPeriod(periodMode, periodValue[periodMode]);
+  const invalidPeriod = periodMode === 'custom' && from && to && from > to;
+  const missingPeriod = period === undefined || (periodMode === 'custom' && (!from || !to));
+  const rangeFrom = period?.from || '';
+  const rangeTo = period?.to || '';
+  const entries = useMemo(() => (invalidPeriod || missingPeriod ? [] : data?.entries || [])
     .filter(e => (!journal || e.journalCode === journal) && (!state || e.state === state))
-    .filter(e => (!from || e.date >= from) && (!to || e.date <= to) && (!type || e.entryType === type) && (!account || e.items.some(i => i.accountCode === account)))
+    .filter(e => (!rangeFrom || e.date >= rangeFrom) && (!rangeTo || e.date <= rangeTo) && (!type || e.entryType === type) && (!account || e.items.some(i => i.accountCode === account)))
     .filter(e => {
       const s = search.trim().toLowerCase();
       return !s || (e.name || '').toLowerCase().includes(s) || (e.partnerName || '').toLowerCase().includes(s);
     })
-    .sort((a, b) => (a.date < b.date ? 1 : a.date > b.date ? -1 : 0)), [data, journal, state, search, from, to, account, type]);
+    .sort((a, b) => (a.date < b.date ? 1 : a.date > b.date ? -1 : 0)), [data, journal, state, search, rangeFrom, rangeTo, invalidPeriod, missingPeriod, account, type]);
 
   return (
     <div className="o-page">
@@ -54,8 +62,17 @@ export default function JournalEntries() {
             <option value="">Tất cả</option>
             {(data?.journals || []).map(j => <option key={j.code} value={j.code}>{j.name}</option>)}
           </select>
-          <label htmlFor="fromDate">Từ ngày</label><input id="fromDate" type="date" value={from} onChange={e => setFrom(e.target.value)} />
-          <label htmlFor="toDate">Đến ngày</label><input id="toDate" type="date" value={to} onChange={e => setTo(e.target.value)} />
+          <label htmlFor="entryPeriod">Kỳ</label>
+          <select id="entryPeriod" value={periodMode} onChange={e => setPeriodMode(e.target.value)}>
+            <option value="all">Tất cả</option><option value="day">Theo ngày</option><option value="week">Theo tuần</option>
+            <option value="month">Theo tháng</option><option value="year">Theo năm</option><option value="custom">Khoảng ngày</option>
+          </select>
+          {periodMode === 'day' && <><label htmlFor="entryDay">Chọn ngày</label><input id="entryDay" type="date" value={periodValue.day} onChange={e => setPeriodValue({ ...periodValue, day: e.target.value })} /></>}
+          {periodMode === 'week' && <><label htmlFor="entryWeek">Chọn một ngày trong tuần</label><input id="entryWeek" type="date" value={periodValue.week} onChange={e => setPeriodValue({ ...periodValue, week: e.target.value })} /></>}
+          {periodMode === 'month' && <><label htmlFor="entryMonth">Chọn tháng và năm</label><input id="entryMonth" type="month" value={periodValue.month} onChange={e => setPeriodValue({ ...periodValue, month: e.target.value })} /></>}
+          {periodMode === 'year' && <><label htmlFor="entryYear">Chọn năm</label><input id="entryYear" type="number" min="1000" max="9999" step="1" value={periodValue.year} onChange={e => setPeriodValue({ ...periodValue, year: e.target.value })} /></>}
+          {periodMode === 'custom' && <><label htmlFor="fromDate">Từ ngày</label><input id="fromDate" type="date" value={from} onChange={e => setFrom(e.target.value)} />
+          <label htmlFor="toDate">Đến ngày</label><input id="toDate" type="date" value={to} onChange={e => setTo(e.target.value)} /></>}
           <label htmlFor="account">Tài khoản</label><select id="account" value={account} onChange={e => setAccount(e.target.value)}><option value="">Tất cả</option>{(data?.accounts || []).map(a => <option key={a.id} value={a.code}>{a.code} - {a.name}</option>)}</select>
           <label htmlFor="entryType">Loại</label><select id="entryType" value={type} onChange={e => setType(e.target.value)}><option value="">Tất cả</option><option value="out_invoice">Hóa đơn bán</option><option value="in_invoice">Hóa đơn mua</option><option value="entry">Bút toán khác</option></select>
           <label className="text-muted" htmlFor="fState">Trạng thái</label>
@@ -67,6 +84,9 @@ export default function JournalEntries() {
           </select>
         </div>
       </div>
+      {invalidPeriod && <p className="o-notice o-notice-error" role="alert">Ngày bắt đầu không được sau ngày kết thúc.</p>}
+      {missingPeriod && <p className="o-notice o-notice-info">Vui lòng chọn đủ thời gian lọc.</p>}
+      {!invalidPeriod && !missingPeriod && (rangeFrom || rangeTo) && <p className="text-muted o-report-note">Kỳ: {rangeFrom ? formatDate(rangeFrom) : '…'} – {rangeTo ? formatDate(rangeTo) : '…'} (ngày hạch toán)</p>}
 
       <div className="o-table-wrapper">
         <table className="o-table w-100">

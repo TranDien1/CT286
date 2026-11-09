@@ -19,7 +19,7 @@ export default function SalesInvoiceForm({ type = 'out_invoice' }) {
   const partnerLabel = purchase ? 'Nhà cung cấp' : 'Khách hàng';
   const { id } = useParams();
   const navigate = useNavigate();
-  const { request, isAccountant, isAdmin, showToast } = useApp();
+  const { request, downloadInvoicePdf, isAccountant, isAdmin, showToast } = useApp();
   const [data, setData] = useState(null);
   const [invoice, setInvoice] = useState(null);
   const [form, setForm] = useState(empty);
@@ -32,6 +32,7 @@ export default function SalesInvoiceForm({ type = 'out_invoice' }) {
   const [partnerName, setPartnerName] = useState('');
   const [preview, setPreview] = useState(false);
   const [paymentOpen, setPaymentOpen] = useState(false);
+  const [downloadingPdf, setDownloadingPdf] = useState(false);
   const [paymentDate, setPaymentDate] = useState(todayStr);
   const [tab, setTab] = useState('lines');
   const pending = useRef(false);
@@ -85,6 +86,15 @@ export default function SalesInvoiceForm({ type = 'out_invoice' }) {
     showToast(`Đã lập ${purchase ? 'phiếu chi' : 'phiếu thu'} ${result.name}.`);
     setReload(n => n + 1);
   });
+  const downloadPdf = async () => {
+    if (!id || downloadingPdf) return;
+    setDownloadingPdf(true);
+    try {
+      await downloadInvoicePdf(Number(id), type);
+      showToast(`Đã tải PDF hóa đơn ${invoice.name}.`);
+    } catch (error) { showToast(error.message, 'warning'); }
+    finally { setDownloadingPdf(false); }
+  };
   const createPartner = () => perform(async () => {
     const p = await request('/partners', { method: 'POST', body: { name: partnerName, partnerType: purchase ? 'supplier' : 'customer' } });
     setData(d => ({ ...d, partners: [...d.partners, p] }));
@@ -124,10 +134,10 @@ export default function SalesInvoiceForm({ type = 'out_invoice' }) {
         {editable && <button type="button" className="o-btn o-btn-secondary" disabled={saving} onClick={save}>{id ? 'Lưu' : 'Lưu nháp'}</button>}
         {editable && id && <><button type="button" className="o-btn o-btn-primary" disabled={saving} onClick={post}>Ghi sổ</button><button type="button" className="o-btn o-btn-danger" disabled={saving} onClick={() => setConfirm('cancel')}>Hủy hóa đơn</button></>}
         {isAccountant && state === 'posted' && invoice?.paymentState === 'not_paid' && <button type="button" className="o-btn o-btn-primary" disabled={saving || invoice.amountTotal <= 0} onClick={() => { setPaymentDate(todayStr()); setPaymentOpen(true); }}>{purchase ? 'Lập phiếu chi' : 'Lập phiếu thu'}</button>}
+        {isAccountant && state === 'posted' && <button type="button" className="o-btn o-btn-secondary" disabled={downloadingPdf || saving} onClick={downloadPdf}>{downloadingPdf ? 'Đang tải PDF…' : 'Tải PDF'}</button>}
         {invoice && <button type="button" className="o-btn o-btn-secondary" onClick={() => setPreview(true)}>Xem trước</button>}
       </div><div className="o-pipeline"><span className={`o-status-step ${state === 'draft' ? 'active' : ''}`}>Nháp</span><span className="o-pipeline-sep">›</span><span className={`o-status-step ${state === 'posted' ? 'active' : ''}`}>Đã ghi sổ</span><span className="o-pipeline-sep">›</span><span className={`o-status-step ${invoice?.paymentState === 'paid' ? 'active' : ''}`}>Đã thanh toán</span></div></div>
       <div className="o-form-title-row"><h2 className="o-form-header">{title} {invoice && <StatusBadge status={state} />} {state === 'posted' && <StatusBadge status={invoice.paymentState} />}</h2>{invoice && <span className="text-muted o-meta">Người tạo: {invoice.createdBy?.name || '—'} · {formatDateTime(invoice.createdAt)}</span>}</div>
-      {state === 'posted' && invoice?.paymentState === 'paid' && <p className="o-notice o-notice-success">Hóa đơn đã thanh toán đủ; chưa hỗ trợ chỉnh sửa hoặc hủy.</p>}
       {state === 'posted' && invoice?.paymentState === 'not_paid' && invoice.amountTotal <= 0 && <p className="o-notice o-notice-info">Không thể lập phiếu thanh toán cho hóa đơn có tổng tiền bằng 0.</p>}
       <div className="o-form-grid"><div className="o-form-section">
         <div className="o-form-group"><label className="d-block text-muted" htmlFor="salePartner">{partnerLabel} *</label><select id="salePartner" className="w-100 p-1" disabled={!editable} value={form.partnerId} onChange={e => setForm({ ...form, partnerId: e.target.value })}><option value="">Chọn {partnerLabel.toLowerCase()}</option>{customers.map(p => <option key={p.id} value={p.id}>{p.name}{!p.active ? ' (ngừng hoạt động)' : ''}</option>)}</select>{editable && <button type="button" className="o-link-btn" onClick={() => setPartnerOpen(true)}>Thêm nhanh {partnerLabel.toLowerCase()}</button>}</div>

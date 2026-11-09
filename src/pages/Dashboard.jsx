@@ -1,9 +1,10 @@
 import React, { useEffect, useMemo, useState } from 'react';
 import { Link } from 'react-router-dom';
 import { useApp } from '../context/AppContext';
-import { overdueInvoices, invoicePath } from '../backend/queries';
+import { invoicePath } from '../backend/queries';
 import { formatCurrency, formatDate, todayStr } from '../utils/format';
 import { paymentTrend } from '../utils/paymentTrend';
+import { invoicesAsOf, overdueAsOf } from '../utils/reportPeriod';
 import PageHeader from '../components/common/PageHeader';
 import StatusBadge from '../components/common/StatusBadge';
 
@@ -12,6 +13,7 @@ export default function Dashboard() {
   const [data, setData] = useState(null);
   const [error, setError] = useState('');
   const [reload, setReload] = useState(0);
+  const today = todayStr();
 
   useEffect(() => {
     let cancelled = false;
@@ -19,27 +21,28 @@ export default function Dashboard() {
     setError('');
     Promise.all([
       request('/invoices?type=out_invoice'), request('/invoices?type=in_invoice'),
-      request('/payments'), request('/reports/debts')
+      request('/payments'), request(`/reports/debts?asOf=${today}`)
     ]).then(([sales, purchases, payments, debts]) => {
       if (!cancelled) setData({ invoices: [...sales, ...purchases], payments, debts });
     }).catch(err => { if (!cancelled) setError(err.message); });
     return () => { cancelled = true; };
-  }, [reload]);
+  }, [reload, today]);
 
   const stats = useMemo(() => {
     if (!data) return null;
     const sum = (code) => data.debts.filter(row => row.accountCode === code).reduce((s, row) => s + Number(row.balance), 0);
-    const overdue = overdueInvoices({ invoices: data.invoices.filter(i => i.invoiceDateDue) });
+    const overdue = overdueAsOf(invoicesAsOf(data.invoices, data.payments, today), today);
     return {
       receivable: sum('131'),
       payable: sum('331'),
       overdue,
       overdueTotal: overdue.reduce((s, i) => s + i.amountTotal, 0),
       drafts: data.invoices.filter(i => i.state === 'draft'),
-      trend: paymentTrend(data.payments, todayStr()),
-      recentPayments: [...data.payments].sort((a, b) => b.paymentDate.localeCompare(a.paymentDate) || b.id - a.id).slice(0, 5)
+      trend: paymentTrend(data.payments, today),
+      recentPayments: data.payments.filter(p => p.paymentDate <= today)
+        .sort((a, b) => b.paymentDate.localeCompare(a.paymentDate) || b.id - a.id).slice(0, 5)
     };
-  }, [data]);
+  }, [data, today]);
 
   const tiles = stats && [
     { label: 'Phải thu khách hàng', value: formatCurrency(stats.receivable), to: '/reports?tab=debts' },

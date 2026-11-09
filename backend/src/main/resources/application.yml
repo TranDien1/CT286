@@ -21,3 +21,8 @@ spring:
 app:
   cors:
     allowed-origins: ${CORS_ALLOWED_ORIGINS:http://localhost:5173}
+  invoice:
+    seller:
+      name: ${INVOICE_SELLER_NAME:CT286 Invoicing}
+      vat: ${INVOICE_SELLER_VAT:}
+      address: ${INVOICE_SELLER_ADDRESS:}

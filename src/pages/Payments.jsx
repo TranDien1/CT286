@@ -3,6 +3,7 @@ import { Link, useSearchParams } from 'react-router-dom';
 import { useApp } from '../context/AppContext';
 import { PAYMENT_INFO, TYPE_INFO } from '../backend/rules';
 import { formatCurrency, formatDate, todayStr } from '../utils/format';
+import { reportPeriod } from '../utils/reportPeriod';
 import DataTable from '../components/common/DataTable';
 import Modal from '../components/common/Modal';
 import PageHeader from '../components/common/PageHeader';
@@ -19,8 +20,15 @@ export default function Payments() {
   const [params, setParams] = useSearchParams();
   const typeFilter = params.get('type') || '';
   const [search, setSearch] = useState('');
+  const [periodMode, setPeriodMode] = useState('all');
+  const [day, setDay] = useState('');
+  const [week, setWeek] = useState('');
+  const [month, setMonth] = useState('');
+  const [year, setYear] = useState('');
   const [open, setOpen] = useState(false);
   const [form, setForm] = useState({ paymentType: 'inbound', partnerId: '', invoiceId: '', date: todayStr() });
+  const periodValue = { day, week, month, year }[periodMode] || '';
+  const period = reportPeriod(periodMode, periodValue);
 
   useEffect(() => {
     let cancelled = false;
@@ -33,9 +41,12 @@ export default function Payments() {
   const rows = (data?.payments || []).filter(p => !typeFilter || p.paymentType === typeFilter);
   const filtered = rows.filter(r => {
     const s = search.trim().toLowerCase();
-    return !s || (r.name || '').toLowerCase().includes(s) || (r.partner?.name || '').toLowerCase().includes(s) || (r.invoiceName || '').toLowerCase().includes(s);
+    const matchSearch = !s || (r.name || '').toLowerCase().includes(s) || (r.partner?.name || '').toLowerCase().includes(s) || (r.invoiceName || '').toLowerCase().includes(s);
+    const matchPeriod = period !== undefined && (!period || (r.paymentDate >= period.from && r.paymentDate <= period.to));
+    return matchSearch && matchPeriod;
   });
-  const total = filtered.reduce((s, r) => s + r.amount, 0);
+  const totalInbound = filtered.filter(r => r.paymentType === 'inbound').reduce((s, r) => s + r.amount, 0);
+  const totalOutbound = filtered.filter(r => r.paymentType === 'outbound').reduce((s, r) => s + r.amount, 0);
 
   // Danh sách chọn trong hộp thoại: chỉ hóa đơn đúng loại, đã ghi sổ, chưa thanh toán (PAY-01, PAY-04, PAY-12)
   const invType = PAYMENT_INFO[form.paymentType].invoiceType;
@@ -98,12 +109,27 @@ export default function Payments() {
         </div>
       </div>
 
-      <div className="o-summary-bar">
+      <div className="o-toolbar">
+        <label htmlFor="paymentPeriod">Lọc theo ngày thanh toán</label>
+        <select id="paymentPeriod" value={periodMode} onChange={e => setPeriodMode(e.target.value)}>
+          <option value="all">Tất cả thời gian</option><option value="day">Theo ngày</option>
+          <option value="week">Theo tuần</option><option value="month">Theo tháng</option><option value="year">Theo năm</option>
+        </select>
+        {periodMode === 'day' && <><label htmlFor="paymentDay">Chọn ngày</label><input id="paymentDay" type="date" value={day} onChange={e => setDay(e.target.value)} /></>}
+        {periodMode === 'week' && <><label htmlFor="paymentWeek">Chọn một ngày trong tuần</label><input id="paymentWeek" type="date" value={week} onChange={e => setWeek(e.target.value)} /></>}
+        {periodMode === 'month' && <><label htmlFor="paymentMonth">Chọn tháng và năm</label><input id="paymentMonth" type="month" value={month} onChange={e => setMonth(e.target.value)} /></>}
+        {periodMode === 'year' && <><label htmlFor="paymentYear">Chọn năm</label><input id="paymentYear" type="number" min="1000" max="9999" step="1" value={year} onChange={e => setYear(e.target.value)} /></>}
+        {period && <span className="text-muted">Từ {formatDate(period.from)} đến {formatDate(period.to)}</span>}
+      </div>
+      {period === undefined && <p className="o-notice o-notice-info">Vui lòng chọn thời gian để lọc phiếu thu/chi.</p>}
+
+      {period !== undefined && <><div className="o-summary-bar">
         <span>{filtered.length} phiếu</span>
-        <span>Tổng tiền: <strong className="num">{formatCurrency(total)}</strong></span>
+        <span>Tổng thu: <strong className="num text-success">{formatCurrency(totalInbound)}</strong></span>
+        <span>Tổng chi: <strong className="num text-danger">{formatCurrency(totalOutbound)}</strong></span>
       </div>
 
-      <DataTable columns={columns} data={filtered} emptyMessage="Chưa có phiếu thu/chi nào." />
+      <DataTable columns={columns} data={filtered} emptyMessage="Chưa có phiếu thu/chi nào khớp bộ lọc." /></>}
       </>}
 
       <Modal

@@ -7,7 +7,8 @@ import { buildPartnerLedger, hasDraftEntries, periodOf } from '../utils/partnerL
 
 const PERIODS = [
   ['this_year', 'Năm nay'], ['last_year', 'Năm trước'], ['this_month', 'Tháng này'],
-  ['last_month', 'Tháng trước'], ['custom', 'Khoảng ngày'], ['all', 'Tất cả']
+  ['last_month', 'Tháng trước'], ['day', 'Theo ngày'], ['week', 'Theo tuần'],
+  ['month', 'Theo tháng'], ['year', 'Theo năm'], ['custom', 'Khoảng ngày'], ['all', 'Tất cả']
 ];
 const ACCOUNTS = [
   ['both', 'Phải thu và phải trả', ['131', '331']],
@@ -17,7 +18,7 @@ const ACCOUNTS = [
 const SHOW_PRINT = !import.meta.env.VITE_ARTIFACT;
 const money = (n) => (n ? formatCurrency(n) : '');
 
-// Sổ cái đối tác (REP-03, REP-04): công nợ 131/331 theo từng đối tác, Admin và Kế toán đều xem được (REP-01).
+// Sổ cái đối tác: công nợ 131/331 theo từng đối tác; tuyến nghiệp vụ chỉ dành cho kế toán.
 export default function PartnerLedger() {
   const { request } = useApp();
   const [params] = useSearchParams();
@@ -27,6 +28,7 @@ export default function PartnerLedger() {
   const [reload, setReload] = useState(0);
   const [preset, setPreset] = useState(focusPartner ? 'all' : 'this_year');
   const [custom, setCustom] = useState({ from: '', to: '' });
+  const [selected, setSelected] = useState({ day: '', week: '', month: '', year: '' });
   const [account, setAccount] = useState('both');
   const [unreconciledOnly, setUnreconciledOnly] = useState(false);
   const [search, setSearch] = useState('');
@@ -42,19 +44,21 @@ export default function PartnerLedger() {
         const dueDates = {}; const matchOf = {};
         [...sales, ...purchases].forEach(i => { dueDates[i.id] = i.invoiceDateDue; if (i.name) matchOf[i.id] = i.name; });
         payments.forEach(p => { matchOf[p.entryId] = p.invoiceName; });
-        setData({ entries, dueDates, matchOf });
+        setData({ entries, dueDates, matchOf, payments });
       })
       .catch(err => { if (!cancelled) setError(err.message); });
     return () => { cancelled = true; };
   }, [reload]);
 
-  const period = periodOf(preset, todayStr(), custom);
-  const invalidPeriod = preset === 'custom' && (!period.from || !period.to || period.from > period.to);
+  const requestedPeriod = periodOf(preset, todayStr(), { ...custom, ...selected });
+  const period = requestedPeriod || { from: '', to: '' };
+  const invalidPeriod = requestedPeriod === undefined || (preset === 'custom' && (!period.from || !period.to || period.from > period.to));
   const accountCodes = ACCOUNTS.find(a => a[0] === account)[2];
   const report = useMemo(() => (data && !invalidPeriod ? buildPartnerLedger(data.entries, {
-    from: period.from, to: period.to, accountCodes, unreconciledOnly, search, dueDates: data.dueDates, matchOf: data.matchOf
+    from: period.from, to: period.to, accountCodes, unreconciledOnly, search,
+    dueDates: data.dueDates, matchOf: data.matchOf, payments: data.payments
   }) : null), [data, period.from, period.to, account, unreconciledOnly, search, invalidPeriod]);
-  const showDraftNotice = data && !hideDraftNotice && hasDraftEntries(data.entries, period.to);
+  const showDraftNotice = data && !invalidPeriod && !hideDraftNotice && hasDraftEntries(data.entries, period.to);
 
   const keyOf = (p) => p.partnerId ?? 'none';
   const toggle = (k) => setExpanded(prev => { const next = new Set(prev); if (next.has(k)) next.delete(k); else next.add(k); return next; });
@@ -81,6 +85,10 @@ export default function PartnerLedger() {
           <select id="ledgerPeriod" className="p-1" value={preset} onChange={e => setPreset(e.target.value)}>
             {PERIODS.map(([k, l]) => <option key={k} value={k}>{l}</option>)}
           </select>
+          {preset === 'day' && <input type="date" aria-label="Chọn ngày" className="p-1" value={selected.day} onChange={e => setSelected({ ...selected, day: e.target.value })} />}
+          {preset === 'week' && <input type="date" aria-label="Chọn một ngày trong tuần" className="p-1" value={selected.week} onChange={e => setSelected({ ...selected, week: e.target.value })} />}
+          {preset === 'month' && <input type="month" aria-label="Chọn tháng và năm" className="p-1" value={selected.month} onChange={e => setSelected({ ...selected, month: e.target.value })} />}
+          {preset === 'year' && <input type="number" min="1000" max="9999" step="1" aria-label="Chọn năm" className="p-1" value={selected.year} onChange={e => setSelected({ ...selected, year: e.target.value })} />}
           {preset === 'custom' && (
             <>
               <input type="date" aria-label="Từ ngày" className="p-1" value={custom.from} onChange={e => setCustom({ ...custom, from: e.target.value })} />
@@ -95,17 +103,17 @@ export default function PartnerLedger() {
             {ACCOUNTS.map(([k, l]) => <option key={k} value={k}>{l}</option>)}
           </select>
         </div>
-        <label className="o-check"><input type="checkbox" checked={unreconciledOnly} onChange={e => setUnreconciledOnly(e.target.checked)} /> Chỉ dòng chưa khớp</label>
+        <label className="o-check"><input type="checkbox" checked={unreconciledOnly} onChange={e => setUnreconciledOnly(e.target.checked)} /> Chỉ khoản còn nợ cuối kỳ</label>
       </div>
 
-      <p className="text-muted o-report-note">
+      {!invalidPeriod && <p className="text-muted o-report-note">
         {period.from || period.to
           ? `Kỳ ${period.from ? formatDate(period.from) : '…'} – ${period.to ? formatDate(period.to) : '…'}. Phát sinh trước kỳ được cộng vào số dư đầu kỳ.`
           : 'Toàn bộ phát sinh.'} Số dư = Nợ − Có: số dương là khách hàng còn nợ mình, số âm là mình còn nợ nhà cung cấp.
-      </p>
+      </p>}
       {account === 'both' && <p className="text-muted o-report-note">Số dư tổng hợp là Nợ trừ Có của cả 131 và 331, không thay thế số dư riêng của từng tài khoản. Chọn từng tài khoản để đối chiếu công nợ.</p>}
-      {unreconciledOnly && <p className="text-muted o-report-note">Chỉ lọc trạng thái đối soát hiện tại, không tái dựng trạng thái đối soát trong quá khứ; tổng và số dư là của các dòng được lọc.</p>}
-      {invalidPeriod && <div className="o-notice o-notice-error" role="alert">Chọn đủ ngày và bảo đảm ngày bắt đầu không sau ngày kết thúc.</div>}
+      {unreconciledOnly && <p className="text-muted o-report-note">Chỉ hiện dòng công nợ hóa đơn chưa thanh toán đến cuối kỳ đã chọn; phiếu thu/chi không hiện trong chế độ này. Với kỳ Tất cả, trạng thái đối soát hiện tại được dùng. Số dư đầu kỳ trong chế độ này là phần phát sinh trước kỳ còn nợ đến cuối kỳ.</p>}
+      {invalidPeriod && <div className="o-notice o-notice-error" role="alert">Chọn thời gian hợp lệ; với khoảng ngày, ngày bắt đầu không được sau ngày kết thúc.</div>}
 
       {showDraftNotice && (
         <div className="o-notice o-notice-info o-ledger-notice o-no-print" role="status">
@@ -146,7 +154,7 @@ export default function PartnerLedger() {
                     </tr>
                     {open && (period.from ? (
                       <tr className="o-ledger-line o-ledger-opening">
-                        <td>Số dư đầu kỳ</td><td /><td /><td>{formatDate(period.from)}</td><td /><td /><td /><td />
+                        <td>{unreconciledOnly ? 'Còn nợ từ trước kỳ' : 'Số dư đầu kỳ'}</td><td /><td /><td>{formatDate(period.from)}</td><td /><td /><td /><td />
                         <td className="text-right num">{formatCurrency(p.opening)}</td>
                       </tr>
                     ) : null)}

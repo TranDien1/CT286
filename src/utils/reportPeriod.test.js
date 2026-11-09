@@ -2,10 +2,15 @@ import test from 'node:test';
 import assert from 'node:assert/strict';
 import { reportPeriod, invoicesAsOf, overdueAsOf } from './reportPeriod.js';
 
-test('day, Monday-to-Sunday week and calendar month ranges', () => {
+test('day, Monday-to-Sunday week, calendar month and year ranges', () => {
   assert.deepEqual(reportPeriod('day', '2026-01-31'), { from: '2026-01-31', to: '2026-01-31' });
   assert.deepEqual(reportPeriod('week', '2026-01-01'), { from: '2025-12-29', to: '2026-01-04' });
+  assert.deepEqual(reportPeriod('week', '2026-11-05'), { from: '2026-11-02', to: '2026-11-08' });
   assert.deepEqual(reportPeriod('month', '2024-02'), { from: '2024-02-01', to: '2024-02-29' });
+  assert.deepEqual(reportPeriod('year', '2024'), { from: '2024-01-01', to: '2024-12-31' });
+  assert.deepEqual(reportPeriod('year', '2026'), { from: '2026-01-01', to: '2026-12-31' });
+  assert.equal(reportPeriod('year', '202'), undefined);
+  assert.equal(reportPeriod('month', '2026-13'), undefined);
   assert.equal(reportPeriod('month', ''), undefined);
   assert.equal(reportPeriod('all', ''), null);
 });

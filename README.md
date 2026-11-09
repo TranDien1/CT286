@@ -1,8 +1,10 @@
 # Hệ thống quản lý hóa đơn
 
-Ứng dụng React + Vite và Spring Boot. Đăng nhập, phân quyền, quản lý người dùng và trang
-tài khoản/sổ nhật ký dùng SQL Server. Các trang nghiệp vụ còn lại vẫn sử dụng dữ liệu mẫu
-trong trình duyệt và chưa lưu vào SQL Server.
+Ứng dụng React + Vite và Spring Boot, lưu dữ liệu nghiệp vụ trong SQL Server.
+Các trang hóa đơn, thu chi, bút toán, sổ cái đối tác, báo cáo và tổng quan đều gọi backend.
+
+Xem [báo cáo kiểm thử sơ bộ ngày 05/11/2026](docs/bao-cao-kiem-thu-so-bo-2026-11-05.md)
+để đối chiếu luồng bán/mua, bút toán, phân quyền và các bước kiểm thử thủ công.
 
 ## Chạy trên localhost
 
@@ -22,14 +24,10 @@ Mật khẩu được băm bằng BCrypt; hãy thay mật khẩu mẫu sau khi k
 
 ## Cấu trúc
 
-- `src/backend/api.js` – các thao tác nghiệp vụ, mỗi thao tác chạy trọn vẹn hoặc không thay đổi gì
-- `src/backend/rules.js` – tính tiền, thuế, bút toán, quá hạn
-- `src/backend/queries.js` – truy vấn cho báo cáo
-- `src/backend/seed.js` – dữ liệu mẫu
-- `src/pages/` – các màn hình
-
-
-#Thong Branch
+- `backend/` – API Spring Boot, kiểm tra nghiệp vụ và truy cập SQL Server
+- `src/backend/` – lớp gọi API, kiểu dữ liệu và hàm tính/hiển thị phía frontend
+- `src/pages/` – các màn hình React
+- `database/invoicing_schema_sqlserver_v7.sql` – DDL hiện hành
 
 ## Backend Spring Boot
 

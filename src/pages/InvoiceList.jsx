@@ -4,6 +4,7 @@ import { useApp } from '../context/AppContext';
 import { TYPE_INFO } from '../backend/rules';
 import { invoiceStatusKey } from '../backend/queries';
 import { formatCurrency, formatDate, todayStr } from '../utils/format';
+import { reportPeriod } from '../utils/reportPeriod';
 import DataTable from '../components/common/DataTable';
 import StatusBadge from '../components/common/StatusBadge';
 import PageHeader from '../components/common/PageHeader';
@@ -20,13 +21,21 @@ const FILTERS = [
 export default function InvoiceList({ type }) {
   const info = TYPE_INFO[type];
   const navigate = useNavigate();
-  const { request, isAccountant } = useApp();
+  const { request, downloadInvoicePdf, isAccountant, showToast } = useApp();
   const [sales, setSales] = useState(null);
   const [loadError, setLoadError] = useState('');
   const [reloadKey, setReloadKey] = useState(0);
   const [search, setSearch] = useState('');
   const [filter, setFilter] = useState('all');
+  const [periodMode, setPeriodMode] = useState('all');
+  const [day, setDay] = useState('');
+  const [week, setWeek] = useState('');
+  const [month, setMonth] = useState('');
+  const [year, setYear] = useState('');
+  const [downloadingId, setDownloadingId] = useState(null);
   const today = todayStr();
+  const periodValue = { day, week, month, year }[periodMode] || '';
+  const period = reportPeriod(periodMode, periodValue);
 
   useEffect(() => {
     let cancelled = false;
@@ -39,21 +48,32 @@ export default function InvoiceList({ type }) {
     .map(i => ({ ...i, status: invoiceStatusKey(i, today) }))
     .sort((a, b) => b.id - a.id), [today, sales]);
 
-  const filtered = rows.filter(r => {
-    const s = search.trim().toLowerCase();
-    const matchSearch = !s || (r.name || '').toLowerCase().includes(s) || (r.partner?.name || '').toLowerCase().includes(s);
-    const matchFilter = filter === 'all'
-      || (filter === 'not_paid' ? ['not_paid', 'overdue'].includes(r.status) : r.status === filter);
-    return matchSearch && matchFilter;
-  });
+  const searchTerm = search.trim().toLowerCase();
+  const baseRows = rows.filter(r => period !== undefined && (!period ||
+    (r.invoiceDate >= period.from && r.invoiceDate <= period.to)) &&
+    (!searchTerm || (r.name || '').toLowerCase().includes(searchTerm) ||
+      (r.partner?.name || '').toLowerCase().includes(searchTerm)));
+  const filtered = baseRows.filter(r => filter === 'all'
+    || (filter === 'not_paid' ? ['not_paid', 'overdue'].includes(r.status) : r.status === filter));
 
   const counts = FILTERS.reduce((acc, f) => {
-    acc[f.key] = f.key === 'all' ? rows.length
-      : rows.filter(r => (f.key === 'not_paid' ? ['not_paid', 'overdue'].includes(r.status) : r.status === f.key)).length;
+    acc[f.key] = f.key === 'all' ? baseRows.length
+      : baseRows.filter(r => (f.key === 'not_paid' ? ['not_paid', 'overdue'].includes(r.status) : r.status === f.key)).length;
     return acc;
   }, {});
 
   const totalDue = filtered.filter(r => r.state === 'posted' && r.paymentState === 'not_paid').reduce((s, r) => s + r.amountTotal, 0);
+
+  const downloadPdf = async (event, invoice) => {
+    event.stopPropagation();
+    if (downloadingId !== null) return;
+    setDownloadingId(invoice.id);
+    try {
+      await downloadInvoicePdf(invoice.id, type);
+      showToast(`Đã tải PDF hóa đơn ${invoice.name}.`);
+    } catch (error) { showToast(error.message, 'warning'); }
+    finally { setDownloadingId(null); }
+  };
 
   const columns = [
     { key: 'name', label: 'Số hóa đơn', sortable: true, sortValue: r => r.name || '', render: r => <strong>{r.name || 'Nháp (chưa cấp số)'}</strong> },
@@ -69,6 +89,14 @@ export default function InvoiceList({ type }) {
     { key: 'status', label: 'Trạng thái', render: r => <StatusBadge status={r.status} /> },
     { key: 'createdBy', label: 'Người tạo', render: r => r.createdBy?.name }
   ];
+  if (isAccountant) columns.push({
+    key: 'pdf', label: 'In hóa đơn',
+    render: r => r.state === 'posted' ? <button type="button" className="o-btn o-btn-sm o-btn-secondary"
+      disabled={downloadingId !== null} onClick={event => downloadPdf(event, r)}
+      aria-label={`Tải PDF hóa đơn ${r.name}`}>
+      {downloadingId === r.id ? 'Đang tải…' : 'Tải PDF'}
+    </button> : '—'
+  });
 
   return (
     <div className="o-page">
@@ -98,7 +126,22 @@ export default function InvoiceList({ type }) {
         </div>
       </div>
 
-      <div className="o-summary-bar">
+      <div className="o-toolbar">
+        <label htmlFor="invoicePeriod">Lọc theo ngày hóa đơn</label>
+        <select id="invoicePeriod" value={periodMode} onChange={e => setPeriodMode(e.target.value)}>
+          <option value="all">Tất cả thời gian</option><option value="day">Theo ngày</option>
+          <option value="week">Theo tuần</option><option value="month">Theo tháng</option><option value="year">Theo năm</option>
+        </select>
+        {periodMode === 'day' && <><label htmlFor="invoiceDay">Chọn ngày</label><input id="invoiceDay" type="date" value={day} onChange={e => setDay(e.target.value)} /></>}
+        {periodMode === 'week' && <><label htmlFor="invoiceWeek">Chọn một ngày trong tuần</label><input id="invoiceWeek" type="date" value={week} onChange={e => setWeek(e.target.value)} /></>}
+        {periodMode === 'month' && <><label htmlFor="invoiceMonth">Chọn tháng và năm</label><input id="invoiceMonth" type="month" value={month} onChange={e => setMonth(e.target.value)} /></>}
+        {periodMode === 'year' && <><label htmlFor="invoiceYear">Chọn năm</label><input id="invoiceYear" type="number" min="1000" max="9999" step="1" value={year} onChange={e => setYear(e.target.value)} /></>}
+        {period && <span className="text-muted">Từ {formatDate(period.from)} đến {formatDate(period.to)}</span>}
+      </div>
+      {period === undefined && <p className="o-notice o-notice-info">Vui lòng chọn thời gian để lọc hóa đơn.</p>}
+      {period && <p className="text-muted o-report-note">Lọc theo ngày hóa đơn; trạng thái và số tiền còn phải thu/trả là trạng thái hiện tại.</p>}
+
+      {period !== undefined && <><div className="o-summary-bar">
         <span>{filtered.length} hóa đơn</span>
         <span>{type === 'out_invoice' ? 'Còn phải thu' : 'Còn phải trả'}: <strong className="num">{formatCurrency(totalDue)}</strong></span>
       </div>
@@ -108,7 +151,7 @@ export default function InvoiceList({ type }) {
         data={filtered}
         onRowClick={r => navigate(`${info.path}/${r.id}`)}
         emptyMessage="Không có hóa đơn nào khớp bộ lọc."
-      />
+      /></>}
       </>}
     </div>
   );

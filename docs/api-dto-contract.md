@@ -1,5 +1,10 @@
 # API and DTO contract - SQL Server v5 + approved migration
 
+> Tài liệu này ghi lại hợp đồng API ở giai đoạn đầu và chưa được cập nhật toàn bộ.
+> Schema hiện hành là `database/invoicing_schema_sqlserver_v7.sql`; dashboard đã dùng dữ liệu SQL Server;
+> Partner có thể mang cả hai vai trò. Xem `bao-cao-kiem-thu-so-bo-2026-11-05.md`
+> để biết trạng thái đã đối chiếu ngày 05/11/2026.
+
 This document is the frontend/backend contract for replacing browser `localStorage`
 with Spring Boot and SQL Server. It follows `invoicing_schema_sqlserver_v5.sql`
 plus `database/migrations/20261019_01_partner_notes.sql`.

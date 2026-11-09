@@ -12,9 +12,14 @@ export function reportPeriod(mode, value) {
     return { from, to: addDays(from, 6) };
   }
   if (mode === 'month') {
+    if (!/^[1-9]\d{3}-(0[1-9]|1[0-2])$/.test(value)) return undefined;
     const [year, month] = value.split('-').map(Number);
     const last = new Date(Date.UTC(year, month, 0)).getUTCDate();
     return { from: `${value}-01`, to: `${value}-${String(last).padStart(2, '0')}` };
+  }
+  if (mode === 'year') {
+    if (!/^[1-9]\d{3}$/.test(value)) return undefined;
+    return { from: `${value}-01-01`, to: `${value}-12-31` };
   }
   return undefined;
 }
