@@ -1,5 +1,5 @@
 import React, { useEffect, useRef, useState } from 'react';
-import { Link, useSearchParams } from 'react-router-dom';
+import { Link, useNavigate, useSearchParams } from 'react-router-dom';
 import { useApp } from '../context/AppContext';
 import { PAYMENT_INFO, TYPE_INFO } from '../backend/rules';
 import { formatCurrency, formatDate, todayStr } from '../utils/format';
@@ -12,6 +12,7 @@ import StatusBadge from '../components/common/StatusBadge';
 // Mục 5 + REP-05: danh sách phiếu thu/chi; lập phiếu từ hóa đơn đã ghi sổ, chưa thanh toán.
 export default function Payments() {
   const { request, showToast, isAccountant } = useApp();
+  const navigate = useNavigate();
   const [data, setData] = useState(null);
   const [error, setError] = useState('');
   const [reload, setReload] = useState(0);
@@ -67,13 +68,13 @@ export default function Payments() {
     try {
       const payment = await request('/payments', { method: 'POST', body: { invoiceId: Number(form.invoiceId), paymentDate: form.date } });
       showToast(`Đã lập ${PAYMENT_INFO[payment.paymentType].label.toLowerCase()} ${payment.name}.`);
-      setOpen(false); setReload(n => n + 1);
+      setOpen(false); navigate(`/payments/${payment.id}`);
     } catch (err) { showToast(err.message, 'warning'); }
     finally { pending.current = false; setSaving(false); }
   };
 
   const columns = [
-    { key: 'name', label: 'Số chứng từ', sortable: true, render: r => <strong>{r.name}</strong> },
+    { key: 'name', label: 'Số chứng từ', sortable: true, render: r => <Link to={`/payments/${r.id}`}><strong>{r.name}</strong></Link> },
     { key: 'paymentType', label: 'Loại', render: r => <StatusBadge status={r.paymentType} /> },
     { key: 'paymentDate', label: 'Ngày', sortable: true, render: r => formatDate(r.paymentDate) },
     { key: 'partner', label: 'Đối tác', sortable: true, sortValue: r => r.partner?.name, render: r => r.partner?.name },

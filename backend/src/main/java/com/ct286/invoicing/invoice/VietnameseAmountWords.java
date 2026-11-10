@@ -4,13 +4,13 @@ import java.math.BigDecimal;
 import java.util.ArrayList;
 import java.util.List;
 
-final class VietnameseAmountWords {
+public final class VietnameseAmountWords {
     private static final String[] DIGITS = {"không", "một", "hai", "ba", "bốn", "năm", "sáu", "bảy", "tám", "chín"};
     private static final String[] UNITS = {"", "nghìn", "triệu", "tỷ", "nghìn tỷ", "triệu tỷ"};
 
     private VietnameseAmountWords() { }
 
-    static String of(BigDecimal amount) {
+    public static String of(BigDecimal amount) {
         long value = amount.longValueExact();
         if (value < 0) throw new IllegalArgumentException("Số tiền không được âm.");
         if (value == 0) return "Không đồng";

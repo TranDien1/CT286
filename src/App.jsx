@@ -7,6 +7,7 @@ import Dashboard from './pages/Dashboard';
 import InvoiceList from './pages/InvoiceList';
 import SalesInvoiceForm from './pages/SalesInvoiceForm';
 import Payments from './pages/Payments';
+import PaymentDetail from './pages/PaymentDetail';
 import JournalEntries from './pages/JournalEntries';
 import JournalEntryDetail from './pages/JournalEntryDetail';
 import PartnerLedger from './pages/PartnerLedger';
@@ -32,6 +33,7 @@ export default function App() {
           <Route path="bills/new" element={<SalesInvoiceForm key="new-bill" type="in_invoice" />} />
           <Route path="bills/:id" element={<SalesInvoiceForm type="in_invoice" />} />
           <Route path="payments" element={<Payments />} />
+          <Route path="payments/:id" element={<PaymentDetail />} />
           <Route path="journal-entries" element={<JournalEntries />} />
           <Route path="journal-entries/:id" element={<JournalEntryDetail />} />
           <Route path="partner-ledger" element={<PartnerLedger />} />

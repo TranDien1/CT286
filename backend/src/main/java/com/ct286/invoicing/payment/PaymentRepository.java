@@ -2,6 +2,7 @@ package com.ct286.invoicing.payment;
 
 import java.math.BigDecimal;
 import java.time.LocalDate;
+import java.time.LocalDateTime;
 import java.util.List;
 import java.util.Optional;
 import org.springframework.jdbc.core.JdbcTemplate;
@@ -12,6 +13,9 @@ class PaymentRepository {
     record Invoice(int id, String name, String type, String state, String paymentState, Integer partnerId, BigDecimal total) { }
     record CashJournal(int id, Integer accountId, String accountCode) { }
     record DebtItem(int id, int accountId, BigDecimal debit, BigDecimal credit, boolean reconciled) { }
+    record DetailData(PaymentDto payment, LocalDateTime createdAt, String state,
+                      String partnerVat, String partnerAddress, boolean reconciled,
+                      List<PaymentDetailDto.Item> items) { }
     private final JdbcTemplate jdbc;
     PaymentRepository(JdbcTemplate jdbc) { this.jdbc = jdbc; }
     Optional<Invoice> lockInvoice(int id) {
@@ -71,7 +75,9 @@ class PaymentRepository {
     private static final String SELECT = """
             SELECT p.id,p.entry_id,p.payment_for_invoice,p.payment_type,p.amount,p.payment_date,
                    e.name,e.partner_id,j.id AS journal_id,j.code AS journal_code,j.name AS journal_name,
-                   partner.name AS partner_name,u.id AS user_id,u.full_name,u.user_name,
+                   partner.name AS partner_name,partner.vat AS partner_vat,
+                   partner.address AS partner_address,partner.city AS partner_city,
+                   e.state,e.created_at,u.id AS user_id,u.full_name,u.user_name,
                    inv.name AS invoice_name,inv.entry_type AS invoice_type
             FROM dbo.Payment p JOIN dbo.Journal_Entry e ON e.id=p.entry_id
             JOIN dbo.Journal j ON j.id=e.journal_id JOIN dbo.Partner partner ON partner.id=e.partner_id
@@ -88,4 +94,34 @@ class PaymentRepository {
     }
     List<PaymentDto> list() { return jdbc.query(SELECT + " ORDER BY p.id DESC",this::map); }
     Optional<PaymentDto> find(int id) { return jdbc.query(SELECT + " WHERE p.id=?",this::map,id).stream().findFirst(); }
+    Optional<DetailData> findDetail(int id) {
+        return jdbc.query(SELECT + " WHERE p.id=?", (r,n) -> {
+            PaymentDto payment = map(r,n);
+            List<PaymentDetailDto.Item> items = jdbc.query("""
+                    SELECT i.id,a.code AS account_code,a.name AS account_name,i.name AS label,
+                           i.display_type,i.debit,i.credit,i.reconciled
+                    FROM dbo.Journal_Item i JOIN dbo.Account a ON a.id=i.account_id
+                    WHERE i.entry_id=? ORDER BY i.id
+                    """, (item,row) -> new PaymentDetailDto.Item(item.getInt("id"),item.getString("account_code"),
+                    item.getString("account_name"),item.getString("label"),item.getString("display_type"),
+                    item.getBigDecimal("debit"),item.getBigDecimal("credit"),item.getBoolean("reconciled")),payment.entryId());
+            String debtCode = "inbound".equals(payment.paymentType()) ? "131" : "331";
+            List<PaymentDetailDto.Item> paymentDebts = items.stream()
+                    .filter(item -> "payment_term".equals(item.displayType()) && debtCode.equals(item.accountCode()))
+                    .toList();
+            List<Boolean> invoiceDebts = jdbc.query("""
+                    SELECT i.reconciled FROM dbo.Journal_Item i JOIN dbo.Account a ON a.id=i.account_id
+                    WHERE i.entry_id=? AND i.display_type='payment_term' AND a.code=?
+                    """, (debt,row) -> debt.getBoolean("reconciled"),payment.invoiceId(),debtCode);
+            boolean reconciled = paymentDebts.size() == 1 && paymentDebts.getFirst().reconciled()
+                    && invoiceDebts.size() == 1 && invoiceDebts.getFirst();
+            String address = r.getString("partner_address");
+            String city = r.getString("partner_city");
+            String fullAddress = address == null ? "" : address.trim();
+            if (city != null && !city.isBlank())
+                fullAddress += (fullAddress.isEmpty() ? "" : ", ") + city.trim();
+            return new DetailData(payment,r.getTimestamp("created_at").toLocalDateTime(),
+                    r.getString("state"),r.getString("partner_vat"),fullAddress,reconciled,items);
+        },id).stream().findFirst();
+    }
 }

@@ -1,5 +1,6 @@
 package com.ct286.invoicing.payment;
 
+import com.ct286.invoicing.invoice.VietnameseAmountWords;
 import com.ct286.invoicing.user.UserDto;
 import java.math.BigDecimal;
 import java.util.List;
@@ -15,6 +16,21 @@ public class PaymentService {
     PaymentService(PaymentRepository repo) { this.repo = repo; }
     @Transactional(readOnly = true)
     public List<PaymentDto> list() { return repo.list(); }
+    @Transactional(readOnly = true)
+    public PaymentDetailDto detail(int id, UserDto actor) {
+        if (actor == null || !"accountant".equals(actor.role()))
+            throw status(HttpStatus.FORBIDDEN,"Chỉ kế toán được xem phiếu thu/chi.");
+        PaymentRepository.DetailData data = repo.findDetail(id)
+                .orElseThrow(() -> status(HttpStatus.NOT_FOUND,"Không tìm thấy phiếu thu/chi."));
+        PaymentDto payment = data.payment();
+        String reason = "Thanh toán đủ hóa đơn" +
+                (payment.invoiceName() == null ? "" : " " + payment.invoiceName());
+        return new PaymentDetailDto(payment.id(),payment.entryId(),payment.invoiceId(),payment.name(),
+                payment.paymentType(),payment.amount(),payment.paymentDate(),payment.journal(),
+                payment.partner(),payment.createdBy(),payment.invoiceName(),payment.invoiceType(),
+                data.createdAt(),data.state(),reason,VietnameseAmountWords.of(payment.amount()),
+                data.partnerVat(),data.partnerAddress(),data.reconciled(),data.items());
+    }
     @Transactional(isolation = Isolation.SERIALIZABLE)
     public PaymentDto create(PaymentRequest request, UserDto actor) {
         if (actor == null || !"accountant".equals(actor.role())) throw status(HttpStatus.FORBIDDEN,"Chỉ kế toán được lập phiếu thu/chi.");

@@ -44,13 +44,10 @@ export function AppProvider({ children }) {
       throw error;
     }
   };
-  const downloadInvoicePdf = async (id, entryType = 'out_invoice') => {
+  const downloadPdf = async (path, fallbackFilename) => {
     let pdf;
     try {
-      pdf = await requestPdfApi(`/invoices/${id}/pdf`, {
-        token: tokenRef.current,
-        fallbackFilename: `${entryType === 'in_invoice' ? 'hoa-don-mua' : 'hoa-don-ban'}-${id}.pdf`
-      });
+      pdf = await requestPdfApi(path, { token: tokenRef.current, fallbackFilename });
     } catch (error) {
       if (error.status === 401) { commitToken(null); setUser(null); }
       throw error;
@@ -65,6 +62,10 @@ export function AppProvider({ children }) {
       window.setTimeout(() => URL.revokeObjectURL(url), 60000);
     }
   };
+  const downloadInvoicePdf = (id, entryType = 'out_invoice') =>
+    downloadPdf(`/invoices/${id}/pdf`, `${entryType === 'in_invoice' ? 'hoa-don-mua' : 'hoa-don-ban'}-${id}.pdf`);
+  const downloadPaymentPdf = (id, paymentType) =>
+    downloadPdf(`/payments/${id}/pdf`, `${paymentType === 'outbound' ? 'phieu-chi' : 'phieu-thu'}-${id}.pdf`);
   const login = async (identifier, password) => {
     try {
       const result = await requestApi('/auth/login', { method: 'POST', body: { identifier, password } });
@@ -85,7 +86,7 @@ export function AppProvider({ children }) {
 
   const value = {
     user, authLoading, isAdmin: user?.role === 'admin', isAccountant: user?.role === 'accountant',
-    login, logout, request, downloadInvoicePdf, changePassword, showToast
+    login, logout, request, downloadInvoicePdf, downloadPaymentPdf, changePassword, showToast
   };
   return <AppContext.Provider value={value}>
     {children}

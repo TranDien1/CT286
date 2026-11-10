@@ -18,7 +18,7 @@ class AuthInterceptorTest {
     @Test
     void adminCannotReadBusinessDataButCanReadConfiguration() throws Exception {
         when(sessions.resolve("admin-token")).thenReturn(new UserData(1, "admin", "Admin", null, null, "hash", "admin", true));
-        for (String path : new String[] {"/api/invoices", "/api/invoices/1", "/api/invoices/1/pdf", "/api/journal-entries", "/api/journal-entries/1", "/api/payments", "/api/reports/debts"}) {
+        for (String path : new String[] {"/api/invoices", "/api/invoices/1", "/api/invoices/1/pdf", "/api/journal-entries", "/api/journal-entries/1", "/api/payments", "/api/payments/1", "/api/payments/1/pdf", "/api/reports/debts"}) {
             var error = assertThrows(ResponseStatusException.class, () -> interceptor.preHandle(request(path, "admin-token"), response, new Object()));
             assertEquals(HttpStatus.FORBIDDEN, error.getStatusCode());
         }
@@ -33,6 +33,8 @@ class AuthInterceptorTest {
         assertTrue(interceptor.preHandle(request("/api/invoices/1/pdf", "accountant-token"), response, new Object()));
         assertTrue(interceptor.preHandle(request("/api/journal-entries", "accountant-token"), response, new Object()));
         assertTrue(interceptor.preHandle(request("/api/payments", "accountant-token"), response, new Object()));
+        assertTrue(interceptor.preHandle(request("/api/payments/1", "accountant-token"), response, new Object()));
+        assertTrue(interceptor.preHandle(request("/api/payments/1/pdf", "accountant-token"), response, new Object()));
         assertTrue(interceptor.preHandle(request("/api/reports/debts", "accountant-token"), response, new Object()));
     }
 
@@ -41,6 +43,9 @@ class AuthInterceptorTest {
         var error = assertThrows(ResponseStatusException.class,
                 () -> interceptor.preHandle(request("/api/invoices/1/pdf", "missing-token"), response, new Object()));
         assertEquals(HttpStatus.UNAUTHORIZED, error.getStatusCode());
+        var paymentError = assertThrows(ResponseStatusException.class,
+                () -> interceptor.preHandle(request("/api/payments/1/pdf", "missing-token"), response, new Object()));
+        assertEquals(HttpStatus.UNAUTHORIZED, paymentError.getStatusCode());
     }
 
     private MockHttpServletRequest request(String path, String token) {

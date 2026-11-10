@@ -2,6 +2,7 @@ package com.ct286.invoicing.user;
 
 import static org.springframework.test.web.servlet.request.MockMvcRequestBuilders.get;
 import static org.springframework.test.web.servlet.result.MockMvcResultMatchers.jsonPath;
+import static org.springframework.test.web.servlet.result.MockMvcResultMatchers.content;
 import static org.springframework.test.web.servlet.result.MockMvcResultMatchers.status;
 
 import org.junit.jupiter.api.Test;
@@ -24,7 +25,7 @@ class RoleAccessSqlServerIntegrationTest {
     @Test void adminCannotReadBusinessEndpointsButCanReadManagementData() throws Exception {
         String token = tokenFor("admin");
         try {
-            for (String path : new String[] {"/api/invoices?type=out_invoice", "/api/journal-entries", "/api/payments", "/api/reports/debts"}) {
+            for (String path : new String[] {"/api/invoices?type=out_invoice", "/api/journal-entries", "/api/payments", "/api/payments/1", "/api/payments/1/pdf", "/api/reports/debts"}) {
                 mvc.perform(get(path).header("Authorization", "Bearer " + token))
                         .andExpect(status().isForbidden())
                         .andExpect(jsonPath("$.status").value(403));
@@ -40,6 +41,14 @@ class RoleAccessSqlServerIntegrationTest {
         String token = tokenFor("accountant");
         try {
             mvc.perform(get("/api/payments").header("Authorization", "Bearer " + token)).andExpect(status().isOk());
+            int paymentId = jdbc.queryForObject("SELECT TOP 1 id FROM dbo.Payment ORDER BY id",Integer.class);
+            mvc.perform(get("/api/payments/{id}",paymentId).header("Authorization","Bearer " + token))
+                    .andExpect(status().isOk()).andExpect(jsonPath("$.items.length()").value(2));
+            mvc.perform(get("/api/payments/{id}/pdf",paymentId).header("Authorization","Bearer " + token))
+                    .andExpect(status().isOk()).andExpect(content().contentType("application/pdf"));
+            mvc.perform(get("/api/payments/{id}",-1).header("Authorization","Bearer " + token))
+                    .andExpect(status().isNotFound());
+            mvc.perform(get("/api/payments/{id}",paymentId)).andExpect(status().isUnauthorized());
             mvc.perform(get("/api/reports/debts").header("Authorization", "Bearer " + token)).andExpect(status().isOk());
         } finally { sessions.revoke(token); }
     }
